@@ -36,15 +36,53 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# --- HELPER: GET VOUCHER STATUS (Live Calculation) ---
+def get_live_voucher(code_or_mac, is_mac=False):
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    if is_mac:
+        c.execute("SELECT * FROM vouchers WHERE mac_address=? AND status='active'", (code_or_mac,))
+    else:
+        c.execute("SELECT * FROM vouchers WHERE code=?", (code_or_mac,))
+    v = c.fetchone()
+    
+    if not v:
+        conn.close()
+        return None
+
+    # ID, CODE, DURATION, STATUS, CREATED, ACTIVATED, MAC, EXPIRES
+    v_id, v_code, duration, status, created, activated, v_mac, expires_str = v
+    
+    # LIVE CHECK: If it's active but the time is past, mark as expired now
+    if status == 'active' and expires_str:
+        expires_at = datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S.%f")
+        if datetime.now() > expires_at:
+            c.execute("UPDATE vouchers SET status='expired' WHERE id=?", (v_id,))
+            conn.commit()
+            status = 'expired'
+            
+    conn.close()
+    # Return as a dictionary for easy use
+    return {
+        "id": v_id, "code": v_code, "status": status, 
+        "mac": v_mac, "expires_at": expires_str
+    }
+
 # --- ROUTES ---
 
-# 1. THE CAPTIVE PORTAL LOGIN (User View)
 @app.route('/')
 @app.route('/login')
 def login():
-    # Cudy redirects here with params: gw_id, client_mac, etc.
     mac = request.args.get('mac')
-    gw_url = request.args.get('gw_url') # The Cudy's local URL for auth
+    gw_url = request.args.get('gw_url')
+    
+    # Check if this MAC already has a LIVE active voucher
+    if mac:
+        active_v = get_live_voucher(mac, is_mac=True)
+        if active_v and active_v['status'] == 'active':
+            # Already active! Skip login and reconnect them.
+            return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={active_v['code']}")
+
     return render_template('login.html', mac=mac, gw_url=gw_url)
 
 # 2. VOUCHER VALIDATION LOGIC
@@ -54,42 +92,60 @@ def authenticate():
     mac = request.form.get('mac')
     gw_url = request.form.get('gw_url')
 
-    conn = sqlite3.connect('hotspot.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM vouchers WHERE code=?", (code,))
-    v = c.fetchone()
+    v = get_live_voucher(code)
 
     if not v:
         flash("Invalid voucher code.")
         return redirect(url_for('login', mac=mac, gw_url=gw_url))
 
-    # ID, CODE, DURATION, STATUS, CREATED, ACTIVATED, MAC, EXPIRES
-    v_id, v_code, duration, status, created, activated, v_mac, expires = v
-
-    if status == 'active' and v_mac != mac:
+    if v['status'] == 'active' and v['mac'] != mac:
         flash("Voucher is already in use by another device.")
         return redirect(url_for('login', mac=mac, gw_url=gw_url))
     
-    if status == 'expired':
+    if v['status'] == 'expired':
         flash("Voucher has expired.")
         return redirect(url_for('login', mac=mac, gw_url=gw_url))
 
     # Activate Unused Voucher
-    if status == 'unused':
+    if v['status'] == 'unused':
+        conn = sqlite3.connect('hotspot.db')
+        c = conn.cursor()
         now = datetime.now()
+        # Fetch the original duration from the DB to calculate expiry
+        c.execute("SELECT duration_days FROM vouchers WHERE id=?", (v['id'],))
+        duration = c.fetchone()[0]
         expiry = now + timedelta(days=duration)
         c.execute("UPDATE vouchers SET status='active', activated_at=?, mac_address=?, expires_at=? WHERE id=?",
-                  (now, mac, expiry, v_id))
+                  (now, mac, expiry, v['id']))
         conn.commit()
+        conn.close()
 
-    conn.close()
+    if gw_url:
+        return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={code}")
     
-    # WORLD-CLASS HANDSHAKE:
-    # Tell Cudy to open the gate. Usually a redirect to Cudy's auth API.
-    # Example: return redirect(f"{gw_url}/auth?mac={mac}&status=success")
-    return f"<h1>Success!</h1><p>Voucher {code} activated. You are now connected to High-Speed Wi-Fi.</p>"
+    return render_template('success.html', code=code)
 
-# 3. ADMIN LOGIN
+# API for Cudy AP to check if a user should be kicked off
+@app.route('/verify/<mac>')
+def verify_status(mac):
+    v = get_live_voucher(mac, is_mac=True)
+    if v and v['status'] == 'active':
+        return {"status": "authorized", "expires": v['expires_at']}, 200
+    return {"status": "unauthorized"}, 401
+
+# 3. PRINTABLE VOUCHERS VIEW
+@app.route('/admin/print')
+@admin_required
+def print_vouchers():
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    # Only show unused vouchers for printing
+    c.execute("SELECT code, duration_days FROM vouchers WHERE status='unused' ORDER BY created_at DESC")
+    unused = c.fetchall()
+    conn.close()
+    return render_template('print_vouchers.html', vouchers=unused)
+
+# 4. ADMIN LOGIN
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
