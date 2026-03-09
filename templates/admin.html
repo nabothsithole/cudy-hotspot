@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hotspot Admin - Naboth Tech</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; margin: 0; display: flex; }
+        .sidebar { width: 250px; background: #2c3e50; color: white; height: 100vh; padding: 20px; }
+        .main { flex: 1; padding: 40px; overflow-y: auto; }
+        table { width: 100%; background: white; border-collapse: collapse; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #34495e; color: white; }
+        .status-unused { color: #2ecc71; font-weight: bold; }
+        .status-active { color: #3498db; font-weight: bold; }
+        .status-expired { color: #e74c3c; }
+        .gen-box { background: white; padding: 20px; border-radius: 8px; margin-bottom: 30px; display: flex; gap: 20px; align-items: flex-end; }
+        input, select, button { padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #3498db; color: white; border: none; cursor: pointer; }
+        button:hover { background: #2980b9; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Hotspot Admin</h2>
+        <p>Logged in as: Admin</p>
+        <hr>
+        <p>Dashboard</p>
+        <p>Users Online</p>
+        <p>Settings</p>
+    </div>
+    <div class="main">
+        <h1>Voucher Management</h1>
+        
+        <div class="gen-box">
+            <form action="/admin/generate" method="POST" style="display: flex; gap: 15px;">
+                <div>
+                    <label>Amount</label><br>
+                    <input type="number" name="count" value="10" min="1" max="100">
+                </div>
+                <div>
+                    <label>Duration (Days)</label><br>
+                    <select name="duration">
+                        <option value="1">1 Day</option>
+                        <option value="7">7 Days</option>
+                        <option value="30">30 Days</option>
+                    </select>
+                </div>
+                <button type="submit">GENERATE VOUCHERS</button>
+            </form>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Duration</th>
+                    <th>Status</th>
+                    <th>MAC Address</th>
+                    <th>Activated At</th>
+                    <th>Expires At</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vouchers %}
+                <tr>
+                    <td><strong>{{ v[1] }}</strong></td>
+                    <td>{{ v[2] }} Days</td>
+                    <td><span class="status-{{ v[3] }}">{{ v[3]|upper }}</span></td>
+                    <td>{{ v[6] or '---' }}</td>
+                    <td>{{ v[5] or '---' }}</td>
+                    <td>{{ v[7] or '---' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
