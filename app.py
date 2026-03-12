@@ -59,6 +59,16 @@ def init_db():
 
 init_db()
 
+# --- HELPER: CLEANUP EXPIRED VOUCHERS (Global) ---
+def cleanup_expired_vouchers():
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    now = datetime.now()
+    # Batch update any active voucher whose expiry time has passed
+    c.execute("UPDATE vouchers SET status='expired' WHERE status='active' AND expires_at < ?", (now,))
+    conn.commit()
+    conn.close()
+
 # --- HELPER: GET SETTING ---
 def get_setting(key, default=None):
     conn = sqlite3.connect('hotspot.db')
@@ -201,6 +211,7 @@ def admin_logout():
 @app.route('/admin')
 @admin_required
 def admin_dashboard():
+    cleanup_expired_vouchers() # Ensure we see accurate data
     conn = sqlite3.connect('hotspot.db')
     c = conn.cursor()
     c.execute("SELECT * FROM vouchers ORDER BY created_at DESC")
@@ -211,6 +222,7 @@ def admin_dashboard():
 @app.route('/admin/online')
 @admin_required
 def admin_online():
+    cleanup_expired_vouchers() # Remove expired ones first
     conn = sqlite3.connect('hotspot.db')
     c = conn.cursor()
     five_mins_ago = (datetime.now() - timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S.%f")
