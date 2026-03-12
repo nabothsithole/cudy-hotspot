@@ -1,17 +1,25 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask_bcrypt import Bcrypt
+from dotenv import load_dotenv
 import sqlite3
 import random
 import string
+import os
 from datetime import datetime, timedelta
 import functools
 
+# Load environment variables from .env file
+load_dotenv()
+
 app = Flask(__name__)
-app.secret_key = 'HOTSPOT_SECURE_KEY' # In production, use a real secret
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'default-secret-key')
+bcrypt = Bcrypt(app)
 
 # --- DATABASE SETUP ---
 def init_db():
     conn = sqlite3.connect('hotspot.db')
     c = conn.cursor()
+    # Vouchers table
     c.execute('''CREATE TABLE IF NOT EXISTS vouchers (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  code TEXT UNIQUE,
@@ -20,12 +28,45 @@ def init_db():
                  created_at DATETIME,
                  activated_at DATETIME,
                  mac_address TEXT,
-                 expires_at DATETIME
+                 expires_at DATETIME,
+                 last_seen DATETIME
                  )''')
+    
+    # Settings table
+    c.execute('''CREATE TABLE IF NOT EXISTS settings (
+                 key TEXT PRIMARY KEY,
+                 value TEXT
+                 )''')
+    
+    # MIGRATION: Check if last_seen exists in vouchers (safety for existing DBs)
+    c.execute("PRAGMA table_info(vouchers)")
+    columns = [column[1] for column in c.fetchall()]
+    if 'last_seen' not in columns:
+        c.execute("ALTER TABLE vouchers ADD COLUMN last_seen DATETIME")
+    
+    # Initialize default settings if not exists
+    default_settings = {
+        'hotspot_name': os.getenv('HOTSPOT_NAME', 'Cudy AX3000 Hotspot'),
+        'admin_password_hash': bcrypt.generate_password_hash(os.getenv('ADMIN_PASSWORD', 'naboth123')).decode('utf-8'),
+        'portal_url': os.getenv('PORTAL_URL', 'http://your-server-ip:5000/login')
+    }
+    
+    for key, value in default_settings.items():
+        c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value))
+        
     conn.commit()
     conn.close()
 
 init_db()
+
+# --- HELPER: GET SETTING ---
+def get_setting(key, default=None):
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key=?", (key,))
+    res = c.fetchone()
+    conn.close()
+    return res[0] if res else default
 
 # --- SECURITY DECORATOR ---
 def admin_required(f):
@@ -50,8 +91,8 @@ def get_live_voucher(code_or_mac, is_mac=False):
         conn.close()
         return None
 
-    # ID, CODE, DURATION, STATUS, CREATED, ACTIVATED, MAC, EXPIRES
-    v_id, v_code, duration, status, created, activated, v_mac, expires_str = v
+    # ID, CODE, DURATION, STATUS, CREATED, ACTIVATED, MAC, EXPIRES, LAST_SEEN
+    v_id, v_code, duration, status, created, activated, v_mac, expires_str, last_seen = v
     
     # LIVE CHECK: If it's active but the time is past, mark as expired now
     if status == 'active' and expires_str:
@@ -60,12 +101,15 @@ def get_live_voucher(code_or_mac, is_mac=False):
             c.execute("UPDATE vouchers SET status='expired' WHERE id=?", (v_id,))
             conn.commit()
             status = 'expired'
+        else:
+            # Update last_seen if it's currently being verified/checked
+            c.execute("UPDATE vouchers SET last_seen=? WHERE id=?", (datetime.now(), v_id))
+            conn.commit()
             
     conn.close()
-    # Return as a dictionary for easy use
     return {
         "id": v_id, "code": v_code, "status": status, 
-        "mac": v_mac, "expires_at": expires_str
+        "mac": v_mac, "expires_at": expires_str, "last_seen": last_seen
     }
 
 # --- ROUTES ---
@@ -75,17 +119,15 @@ def get_live_voucher(code_or_mac, is_mac=False):
 def login():
     mac = request.args.get('mac')
     gw_url = request.args.get('gw_url')
+    hotspot_name = get_setting('hotspot_name')
     
-    # Check if this MAC already has a LIVE active voucher
     if mac:
         active_v = get_live_voucher(mac, is_mac=True)
         if active_v and active_v['status'] == 'active':
-            # Already active! Skip login and reconnect them.
             return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={active_v['code']}")
 
-    return render_template('login.html', mac=mac, gw_url=gw_url)
+    return render_template('login.html', mac=mac, gw_url=gw_url, hotspot_name=hotspot_name)
 
-# 2. VOUCHER VALIDATION LOGIC
 @app.route('/auth', methods=['POST'])
 def authenticate():
     code = request.form.get('voucher').strip().upper()
@@ -106,17 +148,15 @@ def authenticate():
         flash("Voucher has expired.")
         return redirect(url_for('login', mac=mac, gw_url=gw_url))
 
-    # Activate Unused Voucher
     if v['status'] == 'unused':
         conn = sqlite3.connect('hotspot.db')
         c = conn.cursor()
         now = datetime.now()
-        # Fetch the original duration from the DB to calculate expiry
         c.execute("SELECT duration_days FROM vouchers WHERE id=?", (v['id'],))
         duration = c.fetchone()[0]
         expiry = now + timedelta(days=duration)
-        c.execute("UPDATE vouchers SET status='active', activated_at=?, mac_address=?, expires_at=? WHERE id=?",
-                  (now, mac, expiry, v['id']))
+        c.execute("UPDATE vouchers SET status='active', activated_at=?, mac_address=?, expires_at=?, last_seen=? WHERE id=?",
+                  (now, mac, expiry, now, v['id']))
         conn.commit()
         conn.close()
 
@@ -125,7 +165,6 @@ def authenticate():
     
     return render_template('success.html', code=code)
 
-# API for Cudy AP to check if a user should be kicked off
 @app.route('/verify/<mac>')
 def verify_status(mac):
     v = get_live_voucher(mac, is_mac=True)
@@ -133,29 +172,32 @@ def verify_status(mac):
         return {"status": "authorized", "expires": v['expires_at']}, 200
     return {"status": "unauthorized"}, 401
 
-# 3. PRINTABLE VOUCHERS VIEW
 @app.route('/admin/print')
 @admin_required
 def print_vouchers():
     conn = sqlite3.connect('hotspot.db')
     c = conn.cursor()
-    # Only show unused vouchers for printing
     c.execute("SELECT code, duration_days FROM vouchers WHERE status='unused' ORDER BY created_at DESC")
     unused = c.fetchall()
     conn.close()
     return render_template('print_vouchers.html', vouchers=unused)
 
-# 4. ADMIN LOGIN
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
-        if request.form.get('password') == 'naboth123': # Default admin password
+        password = request.form.get('password')
+        stored_hash = get_setting('admin_password_hash')
+        if bcrypt.check_password_hash(stored_hash, password):
             session['admin_logged_in'] = True
             return redirect(url_for('admin_dashboard'))
         flash("Invalid Admin Password")
     return render_template('admin_login.html')
 
-# 4. ADMIN DASHBOARD (Check Vouchers & Users)
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('admin_login'))
+
 @app.route('/admin')
 @admin_required
 def admin_dashboard():
@@ -166,12 +208,48 @@ def admin_dashboard():
     conn.close()
     return render_template('admin.html', vouchers=all_vouchers)
 
-# 5. GENERATE VOUCHERS (Admin tool)
+@app.route('/admin/online')
+@admin_required
+def admin_online():
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    five_mins_ago = (datetime.now() - timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S.%f")
+    c.execute("SELECT * FROM vouchers WHERE status='active' AND last_seen > ? ORDER BY last_seen DESC", (five_mins_ago,))
+    online_vouchers = c.fetchall()
+    conn.close()
+    return render_template('admin_online.html', vouchers=online_vouchers)
+
+@app.route('/admin/settings', methods=['GET', 'POST'])
+@admin_required
+def admin_settings():
+    if request.method == 'POST':
+        hotspot_name = request.form.get('hotspot_name')
+        new_password = request.form.get('password')
+        
+        conn = sqlite3.connect('hotspot.db')
+        c = conn.cursor()
+        c.execute("UPDATE settings SET value=? WHERE key='hotspot_name'", (hotspot_name,))
+        
+        if new_password and len(new_password) > 0:
+            new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+            c.execute("UPDATE settings SET value=? WHERE key='admin_password_hash'", (new_hash,))
+            
+        conn.commit()
+        conn.close()
+        flash("Settings updated successfully.")
+        return redirect(url_for('admin_settings'))
+    
+    settings = {
+        'hotspot_name': get_setting('hotspot_name'),
+        'portal_url': get_setting('portal_url')
+    }
+    return render_template('admin_settings.html', settings=settings)
+
 @app.route('/admin/generate', methods=['POST'])
 @admin_required
 def generate():
     count = int(request.form.get('count', 10))
-    duration = int(request.form.get('duration', 1)) # 1 to 30 days
+    duration = int(request.form.get('duration', 1))
     
     conn = sqlite3.connect('hotspot.db')
     c = conn.cursor()

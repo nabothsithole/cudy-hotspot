@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Online Users - Hotspot Admin</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; margin: 0; display: flex; }
+        .sidebar { width: 250px; background: #2c3e50; color: white; height: 100vh; padding: 20px; }
+        .main { flex: 1; padding: 40px; overflow-y: auto; }
+        table { width: 100%; background: white; border-collapse: collapse; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #34495e; color: white; }
+        .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 0; opacity: 0.8; }
+        .sidebar a:hover { opacity: 1; background: #34495e; padding-left: 10px; transition: 0.3s; }
+        .status-online { color: #2ecc71; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Hotspot Admin</h2>
+        <p>Logged in as: Admin</p>
+        <hr>
+        <a href="/admin">Voucher Management</a>
+        <a href="/admin/online" style="background: #34495e; padding-left: 10px;">Users Online</a>
+        <a href="/admin/settings">Settings</a>
+        <div style="position: absolute; bottom: 20px; font-size: 12px; opacity: 0.6;">
+            Developed by <strong>Naboth Sithole</strong><br>
+            Naboth Tech Solutions &copy; 2026
+        </div>
+    </div>
+    <div class="main">
+        <h1>Currently Online Devices</h1>
+        <p>Devices that have been active in the last 5 minutes.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>MAC Address</th>
+                    <th>Voucher Code</th>
+                    <th>Last Seen</th>
+                    <th>Expires At</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vouchers %}
+                <tr>
+                    <td><code>{{ v[6] }}</code></td>
+                    <td><strong>{{ v[1] }}</strong></td>
+                    <td>{{ v[8] }}</td>
+                    <td>{{ v[7] }}</td>
+                    <td><span class="status-online">ONLINE</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; color: #7f8c8d;">No devices currently online.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

@@ -23,10 +23,15 @@
     </style>
 </head>
 <body>
-    <div class="no-print" style="margin-bottom: 30px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
-        <h2 style="margin: 0;">Ready to Print</h2>
-        <p>Cut along the dashed lines after printing.</p>
-        <button onclick="window.print()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">PRINT NOW</button>
+    <div class="no-print" style="margin-bottom: 30px; background: #f8f9fa; padding: 15px; border-radius: 8px; display: flex; align-items: center; gap: 20px;">
+        <div style="flex: 1;">
+            <h2 style="margin: 0;">Ready to Print</h2>
+            <p style="margin: 5px 0 0 0;">Cut along the dashed lines after printing.</p>
+        </div>
+        <a href="/admin" style="text-decoration: none;">
+            <button style="padding: 10px 20px; background: #7f8c8d; color: white; border: none; border-radius: 5px; cursor: pointer;">BACK TO DASHBOARD</button>
+        </a>
+        <button onclick="window.print()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">PRINT NOW</button>
     </div>
 
     <div class="voucher-grid">

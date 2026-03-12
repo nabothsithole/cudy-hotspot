@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings - Hotspot Admin</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; margin: 0; display: flex; }
+        .sidebar { width: 250px; background: #2c3e50; color: white; height: 100vh; padding: 20px; }
+        .main { flex: 1; padding: 40px; overflow-y: auto; }
+        .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 0; opacity: 0.8; }
+        .sidebar a:hover { opacity: 1; background: #34495e; padding-left: 10px; transition: 0.3s; }
+        .settings-card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; color: #7f8c8d; }
+        input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background: #3498db; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%; }
+        button:hover { background: #2980b9; }
+        .flash { background: #d4edda; color: #155724; padding: 10px; border-radius: 4px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Hotspot Admin</h2>
+        <p>Logged in as: Admin</p>
+        <hr>
+        <a href="/admin">Voucher Management</a>
+        <a href="/admin/online">Users Online</a>
+        <a href="/admin/settings" style="background: #34495e; padding-left: 10px;">Settings</a>
+        <a href="/admin/logout" style="color: #e74c3c; margin-top: 20px;">Logout</a>
+        <div style="position: absolute; bottom: 20px; font-size: 12px; opacity: 0.6;">
+            Developed by <strong>Naboth Sithole</strong><br>
+            Naboth Tech Solutions &copy; 2026
+        </div>
+    </div>
+    <div class="main">
+        <h1>Admin Settings</h1>
+        
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="flash">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="settings-card">
+            <form action="/admin/settings" method="POST">
+                <div class="form-group">
+                    <label>Hotspot Name (Shown on Login Page)</label>
+                    <input type="text" name="hotspot_name" value="{{ settings.hotspot_name }}">
+                </div>
+                <div class="form-group">
+                    <label>Change Admin Password</label>
+                    <input type="password" name="password" placeholder="Enter new password to change">
+                    <small style="color: #95a5a6;">Leave blank to keep current password.</small>
+                </div>
+                <div class="form-group">
+                    <label>External Portal URL (Cudy AP Config)</label>
+                    <input type="text" name="portal_url" value="{{ settings.portal_url }}" readonly style="background: #f9f9f9;">
+                    <small style="color: #95a5a6;">Copy this into your Cudy Admin Panel.</small>
+                </div>
+                <button type="submit">SAVE SETTINGS</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

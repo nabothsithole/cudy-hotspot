@@ -5,6 +5,8 @@
     <style>
         body { font-family: sans-serif; background: #f0f2f5; margin: 0; display: flex; }
         .sidebar { width: 250px; background: #2c3e50; color: white; height: 100vh; padding: 20px; }
+        .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 0; opacity: 0.8; }
+        .sidebar a:hover { opacity: 1; background: #34495e; padding-left: 10px; transition: 0.3s; }
         .main { flex: 1; padding: 40px; overflow-y: auto; }
         table { width: 100%; background: white; border-collapse: collapse; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
@@ -16,6 +18,7 @@
         input, select, button { padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
         button { background: #3498db; color: white; border: none; cursor: pointer; }
         button:hover { background: #2980b9; }
+        .flash { background: #d4edda; color: #155724; padding: 10px; border-radius: 4px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -23,9 +26,9 @@
         <h2>Hotspot Admin</h2>
         <p>Logged in as: Admin</p>
         <hr>
-        <p>Dashboard</p>
-        <p>Users Online</p>
-        <p>Settings</p>
+        <a href="/admin" style="background: #34495e; padding-left: 10px;">Voucher Management</a>
+        <a href="/admin/online">Users Online</a>
+        <a href="/admin/settings">Settings</a>
         <div style="position: absolute; bottom: 20px; font-size: 12px; opacity: 0.6;">
             Developed by <strong>Naboth Sithole</strong><br>
             Naboth Tech Solutions &copy; 2026
@@ -33,6 +36,14 @@
     </div>
     <div class="main">
         <h1>Voucher Management</h1>
+        
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="flash">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
         
         <div class="gen-box">
             <form action="/admin/generate" method="POST" style="display: flex; gap: 15px;">
@@ -64,7 +75,7 @@
                     <th>Duration</th>
                     <th>Status</th>
                     <th>MAC Address</th>
-                    <th>Activated At</th>
+                    <th>Last Seen</th>
                     <th>Expires At</th>
                 </tr>
             </thead>
@@ -74,8 +85,8 @@
                     <td><strong>{{ v[1] }}</strong></td>
                     <td>{{ v[2] }} Days</td>
                     <td><span class="status-{{ v[3] }}">{{ v[3]|upper }}</span></td>
-                    <td>{{ v[6] or '---' }}</td>
-                    <td>{{ v[5] or '---' }}</td>
+                    <td><code>{{ v[6] or '---' }}</code></td>
+                    <td>{{ v[8] or '---' }}</td>
                     <td>{{ v[7] or '---' }}</td>
                 </tr>
                 {% endfor %}

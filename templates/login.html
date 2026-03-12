@@ -13,24 +13,25 @@
 </head>
 <body>
     <div class="card">
-        <h2>Connect to Wi-Fi</h2>
+        <h2>{{ hotspot_name or 'Wi-Fi Login' }}</h2>
         <p>Device: {{ mac or 'New User' }}</p>
         
         <form action="/auth" method="POST">
             <input type="hidden" name="mac" value="{{ mac }}">
             <input type="hidden" name="gw_url" value="{{ gw_url }}">
-            <input type="text" name="voucher" placeholder="Enter Voucher Code" required>
+            <input type="text" name="voucher" placeholder="Enter Voucher Code" required style="text-transform: uppercase;">
             <button type="submit">CONNECT NOW</button>
         </form>
 
         {% with messages = get_flashed_messages() %}
             {% if messages %}
-                <p style="color: red; font-size: 14px;">{{ messages[0] }}</p>
+                <p style="color: #e74c3c; font-size: 14px; font-weight: bold; background: #fadbd8; padding: 10px; border-radius: 8px;">{{ messages[0] }}</p>
             {% endif %}
         {% endwith %}
 
-        <div style="margin-top: 30px; font-size: 11px; color: #bdc3c7; border-top: 1px solid #eee; pt-15px; padding-top: 15px;">
-            Powered by <strong>Naboth Tech Solutions</strong> &copy; 2026
+        <div style="margin-top: 30px; font-size: 11px; color: #bdc3c7; border-top: 1px solid #eee; padding-top: 15px;">
+            Securely Managed by <strong>Naboth Tech Solutions</strong><br>
+            &copy; 2026
         </div>
     </div>
 </body>
