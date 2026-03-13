@@ -2,9 +2,11 @@
 <html>
 <head>
     <title>Hotspot Admin - Naboth Tech</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: sans-serif; background: #f0f2f5; margin: 0; display: flex; }
-        .sidebar { width: 250px; background: #2c3e50; color: white; height: 100vh; padding: 20px; }
+        .sidebar { width: 250px; background: #2c3e50; color: white; min-height: 100vh; padding: 20px; }
         .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 0; opacity: 0.8; }
         .sidebar a:hover { opacity: 1; background: #34495e; padding-left: 10px; transition: 0.3s; }
         .main { flex: 1; padding: 40px; overflow-y: auto; }
@@ -14,7 +16,7 @@
         .status-unused { color: #2ecc71; font-weight: bold; }
         .status-active { color: #3498db; font-weight: bold; }
         .status-expired { color: #e74c3c; }
-        .gen-box { background: white; padding: 20px; border-radius: 8px; margin-bottom: 30px; display: flex; gap: 20px; align-items: flex-end; }
+        .gen-box { background: white; padding: 20px; border-radius: 8px; margin-bottom: 30px; display: flex; gap: 20px; align-items: flex-end; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         input, select, button { padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
         button { background: #3498db; color: white; border: none; cursor: pointer; }
         button:hover { background: #2980b9; }
@@ -24,6 +26,29 @@
         .stat-card h3 { margin: 0; color: #7f8c8d; font-size: 14px; text-transform: uppercase; font-weight: 600; }
         .stat-card p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #2c3e50; }
         .stat-revenue { color: #27ae60 !important; }
+        .filter-box { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .filter-box input, .filter-box select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .duration-btns { display: flex; gap: 5px; margin-top: 5px; }
+        .duration-btn { padding: 4px 8px; font-size: 11px; background: #eee; border: 1px solid #ddd; cursor: pointer; border-radius: 3px; }
+        .duration-btn:hover { background: #ddd; }
+        
+        .chart-container { background: white; padding: 20px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); height: 300px; }
+        
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; min-height: auto; box-sizing: border-box; }
+            .main { padding: 20px; }
+            .stats-container { flex-direction: column; }
+            .gen-box { flex-direction: column; align-items: stretch; }
+            .filter-box form { flex-direction: column; align-items: stretch; }
+            
+            table thead { display: none; }
+            table, table tbody, table tr, table td { display: block; width: 100%; }
+            table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; box-sizing: border-box; }
+            table td { text-align: right; padding-left: 50%; position: relative; border-bottom: none; }
+            table td::before { content: attr(data-label); position: absolute; left: 10px; width: 45%; text-align: left; font-weight: bold; color: #7f8c8d; }
+        }
     </style>
 </head>
 <body>
@@ -34,22 +59,15 @@
         <a href="/admin" style="background: #34495e; padding-left: 10px;">Voucher Management</a>
         <a href="/admin/online">Users Online</a>
         <a href="/admin/settings">Settings</a>
+        <a href="/admin/export" style="color: #f39c12; margin-top: 20px;"><i class="fa-solid fa-file-export"></i> Export CSV</a>
         <div style="position: absolute; bottom: 20px; font-size: 12px; opacity: 0.6;">
             Developed by <strong>Naboth Sithole</strong><br>
             Naboth Tech Solutions &copy; 2026
         </div>
     </div>
     <div class="main">
-        <h1>Voucher Management</h1>
+        <h1>Dashboard</h1>
         
-        {% with messages = get_flashed_messages() %}
-          {% if messages %}
-            {% for message in messages %}
-              <div class="flash">{{ message }}</div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-
         <div class="stats-container">
             <div class="stat-card">
                 <h3>Total Revenue</h3>
@@ -64,22 +82,41 @@
                 <p>{{ stats.total_vouchers_generated|int }}</p>
             </div>
         </div>
+
+        <div class="chart-container">
+            <canvas id="revenueChart"></canvas>
+        </div>
+        
+        <div class="filter-box">
+            <form method="GET" style="display: flex; gap: 15px; width: 100%; align-items: center;">
+                <input type="text" name="search" placeholder="Search Code..." value="{{ search }}" style="flex: 1;">
+                <select name="status">
+                    <option value="">All Statuses</option>
+                    <option value="unused" {% if status_filter == 'unused' %}selected{% endif %}>Unused</option>
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                    <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>Expired</option>
+                </select>
+                <button type="submit" style="background: #7f8c8d; width: auto; margin:0;">FILTER</button>
+                <a href="/admin" style="color: #7f8c8d; font-size: 12px; text-decoration: none;">Clear</a>
+            </form>
+        </div>
         
         <div class="gen-box">
-            <form action="/admin/generate" method="POST" style="display: flex; gap: 15px;">
+            <form action="/admin/generate" method="POST" style="display: flex; gap: 15px; align-items: flex-start;">
                 <div>
                     <label>Amount</label><br>
-                    <input type="number" name="count" value="10" min="1" max="100">
+                    <input type="number" name="count" id="gen_count" value="10" min="1" max="100" oninput="updateGenButton()">
                 </div>
                 <div>
                     <label>Duration (Days)</label><br>
-                    <select name="duration">
-                        <option value="1">1 Day</option>
-                        <option value="7">7 Days</option>
-                        <option value="30">30 Days</option>
-                    </select>
+                    <input type="number" name="duration" id="gen_duration" value="1" min="1" max="365" oninput="updateGenButton()">
+                    <div class="duration-btns">
+                        <span class="duration-btn" onclick="setDuration(1)">1D</span>
+                        <span class="duration-btn" onclick="setDuration(7)">7D</span>
+                        <span class="duration-btn" onclick="setDuration(30)">30D</span>
+                    </div>
                 </div>
-                <button type="submit">GENERATE VOUCHERS</button>
+                <button type="submit" id="gen_btn" style="margin-top: 20px;">GENERATE VOUCHERS</button>
             </form>
             <div style="margin-left: auto;">
                 <a href="/admin/print" target="_blank">
@@ -88,6 +125,29 @@
             </div>
         </div>
 
+        <script>
+            function setDuration(d) {
+                document.getElementById('gen_duration').value = d;
+                updateGenButton();
+            }
+
+            function calculatePrice(days) {
+                if (days == 1) return 1;
+                if (days == 7) return 5;
+                if (days == 30) return 10;
+                return days; // $1 per day
+            }
+
+            function updateGenButton() {
+                const count = document.getElementById('gen_count').value;
+                const days = document.getElementById('gen_duration').value;
+                const pricePerOne = calculatePrice(days);
+                const total = (count * pricePerOne).toFixed(2);
+                document.getElementById('gen_btn').innerText = `GENERATE VOUCHERS ($${total})`;
+            }
+
+            // Init button text
+            window.onload = updateGenButton;
         <table>
             <thead>
                 <tr>
@@ -97,21 +157,53 @@
                     <th>MAC Address</th>
                     <th>Last Seen</th>
                     <th>Expires At</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for v in vouchers %}
                 <tr>
-                    <td><strong>{{ v[1] }}</strong></td>
-                    <td>{{ v[2] }} Days</td>
-                    <td><span class="status-{{ v[3] }}">{{ v[3]|upper }}</span></td>
-                    <td><code>{{ v[6] or '---' }}</code></td>
-                    <td>{{ v[8] or '---' }}</td>
-                    <td>{{ v[7] or '---' }}</td>
+                    <td data-label="Code"><strong>{{ v[1] }}</strong></td>
+                    <td data-label="Duration">{{ v[2] }} Days</td>
+                    <td data-label="Status"><span class="status-{{ v[3] }}">{{ v[3]|upper }}</span></td>
+                    <td data-label="MAC Address"><code>{{ v[6] or '---' }}</code></td>
+                    <td data-label="Last Seen">{{ v[8] or '---' }}</td>
+                    <td data-label="Expires At">{{ v[7] or '---' }}</td>
+                    <td data-label="Actions">
+                        <a href="/admin/delete/{{ v[0] }}?search={{ search }}&status={{ status_filter }}" onclick="return confirm('Are you sure you want to delete this voucher?')">
+                            <i class="fa-solid fa-trash" style="color: #e74c3c; cursor: pointer;"></i>
+                        </a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-    </div>
-</body>
-</html>
+        </div>
+
+        <script>
+        // Chart.js initialization
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: {{ revenue_chart.days|tojson }},
+                datasets: [{
+                    label: 'Daily Revenue ($)',
+                    data: {{ revenue_chart.revenues|tojson }},
+                    backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                    borderColor: 'rgba(52, 152, 219, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        function setDuration(d) {
+        ...
+

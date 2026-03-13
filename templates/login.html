@@ -19,7 +19,7 @@
         <form action="/auth" method="POST">
             <input type="hidden" name="mac" value="{{ mac }}">
             <input type="hidden" name="gw_url" value="{{ gw_url }}">
-            <input type="text" name="voucher" placeholder="Enter Voucher Code" required style="text-transform: uppercase;">
+            <input type="text" name="voucher" placeholder="Enter Voucher Code" value="{{ voucher }}" required style="text-transform: uppercase;">
             <button type="submit">CONNECT NOW</button>
         </form>
 

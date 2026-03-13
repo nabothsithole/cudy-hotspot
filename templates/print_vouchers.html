@@ -2,19 +2,24 @@
 <html>
 <head>
     <title>Print Vouchers - Naboth Tech</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         .voucher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
         .voucher-card { 
             border: 2px dashed #333; 
-            padding: 15px; 
+            padding: 20px; 
             text-align: center; 
-            border-radius: 8px; 
+            border-radius: 12px; 
             background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .code { font-size: 20px; font-weight: 800; color: #2c3e50; margin: 10px 0; display: block; }
-        .duration { font-size: 12px; text-transform: uppercase; color: #7f8c8d; }
-        .brand { font-size: 10px; font-weight: bold; color: #3498db; }
+        .code { font-size: 24px; font-weight: 800; color: #2c3e50; margin: 5px 0 0; display: block; border-top: 1px solid #eee; padding-top: 10px; }
+        .duration { font-size: 14px; text-transform: uppercase; color: #7f8c8d; font-weight: bold; margin-bottom: 5px; }
+        .brand { font-size: 12px; font-weight: bold; color: #3498db; margin-bottom: 5px; display: block; }
+        .qr-code { width: 140px; height: 140px; margin: 10px auto; display: block; }
+        .hint { font-size: 9px; color: #95a5a6; margin-top: 2px; }
         
         @media print {
             .no-print { display: none; }
@@ -31,18 +36,40 @@
         <a href="/admin" style="text-decoration: none;">
             <button style="padding: 10px 20px; background: #7f8c8d; color: white; border: none; border-radius: 5px; cursor: pointer;">BACK TO DASHBOARD</button>
         </a>
-        <button onclick="window.print()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">PRINT NOW</button>
+        <button onclick="downloadPDF()" style="padding: 10px 20px; background: #f39c12; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+            <i class="fa-solid fa-file-pdf"></i> DOWNLOAD PDF
+        </button>
+        <button onclick="window.print()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+            <i class="fa-solid fa-print"></i> PRINT NOW
+        </button>
     </div>
 
-    <div class="voucher-grid">
-        {% for v in vouchers %}
-        <div class="voucher-card">
-            <div class="brand">HIGH-SPEED WI-FI</div>
-            <span class="code">{{ v[0] }}</span>
-            <div class="duration">VALID FOR: {{ v[1] }} DAY(S)</div>
-            <div style="font-size: 8px; margin-top: 5px;">Managed by Naboth Tech</div>
+    <div id="print-area">
+        <div class="voucher-grid">
+            {% for v in vouchers %}
+            <div class="voucher-card">
+                <span class="brand">Naboth Tech Solutions</span>
+                <div class="duration">{{ v[1] }} DAY(S) UNLIMITED</div>
+                <img src="/qr/{{ v[0] }}" class="qr-code">
+                <span class="code">{{ v[0] }}</span>
+                <div class="hint">Scan to connect instantly</div>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
+    <script>
+        function downloadPDF() {
+            const element = document.getElementById('print-area');
+            const opt = {
+                margin:       10,
+                filename:     'vouchers_' + new Date().getTime() + '.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            
+            html2pdf().set(opt).from(element).save();
+        }
+    </script>
 </body>
 </html>

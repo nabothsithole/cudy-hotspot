@@ -1,10 +1,13 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, Response
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 import sqlite3
 import random
 import string
 import os
+import io
+import csv
+import qrcode
 from datetime import datetime, timedelta
 import functools
 
@@ -85,6 +88,43 @@ def init_db():
         
     conn.commit()
     conn.close()
+    sync_stats() # Synchronize stats on startup
+
+def sync_stats():
+    """Backfills stats from existing database records to ensure accuracy."""
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    
+    # 1. Count Total Generated (Active table + History table)
+    c.execute("SELECT COUNT(*) FROM vouchers")
+    active_count = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM voucher_history")
+    history_count = c.fetchone()[0]
+    total_generated = active_count + history_count
+    
+    # 2. Count Total Used (Active with status 'active'/'expired' + History)
+    c.execute("SELECT COUNT(*) FROM vouchers WHERE status IN ('active', 'expired')")
+    active_used = c.fetchone()[0]
+    total_used = active_used + history_count
+    
+    # 3. Calculate Total Revenue
+    # We'll sum based on duration_days for all used/history vouchers
+    c.execute("SELECT duration_days FROM vouchers WHERE status IN ('active', 'expired')")
+    active_durations = c.fetchall()
+    c.execute("SELECT duration_days FROM voucher_history")
+    history_durations = c.fetchall()
+    
+    total_rev = 0
+    for (d,) in active_durations + history_durations:
+        total_rev += get_voucher_price(d)
+        
+    # Update the stats table
+    c.execute("UPDATE stats SET value = ? WHERE key = 'total_vouchers_generated'", (total_generated,))
+    c.execute("UPDATE stats SET value = ? WHERE key = 'total_vouchers_used'", (total_used,))
+    c.execute("UPDATE stats SET value = ? WHERE key = 'total_revenue'", (total_rev,))
+    
+    conn.commit()
+    conn.close()
 
 init_db()
 
@@ -93,7 +133,7 @@ def get_voucher_price(duration):
     if duration == 1: return 1
     if duration == 7: return 5
     if duration == 30: return 10
-    return 0
+    return duration # $1 per day for any other duration
 
 # --- HELPER: UPDATE STATS ---
 def update_stat(key, increment):
@@ -111,6 +151,35 @@ def get_all_stats():
     res = dict(c.fetchall())
     conn.close()
     return res
+
+# --- HELPER: GET DAILY REVENUE (Last 7 Days) ---
+def get_daily_revenue():
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    days = []
+    revenues = []
+    # Ensure tables exist before querying
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='voucher_history'")
+    if not c.fetchone():
+        return {"days": [], "revenues": []}
+
+    for i in range(6, -1, -1):
+        date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+        # Sum revenue from history and active vouchers for this date
+        c.execute("SELECT duration_days FROM voucher_history WHERE activated_at LIKE ?", (f"{date}%",))
+        hist_durations = c.fetchall()
+        c.execute("SELECT duration_days FROM vouchers WHERE status IN ('active', 'expired') AND activated_at LIKE ?", (f"{date}%",))
+        active_durations = c.fetchall()
+        
+        daily_total = 0
+        for (d,) in hist_durations + active_durations:
+            daily_total += get_voucher_price(d)
+        
+        days.append(date)
+        revenues.append(daily_total)
+    
+    conn.close()
+    return {"days": days, "revenues": revenues}
 
 # --- HELPER: CLEANUP EXPIRED VOUCHERS (Global) ---
 def cleanup_expired_vouchers():
@@ -206,6 +275,7 @@ def get_live_voucher(code_or_mac, is_mac=False):
 def login():
     mac = request.args.get('mac')
     gw_url = request.args.get('gw_url')
+    voucher = request.args.get('voucher', '') # Pre-fill from QR code
     hotspot_name = get_setting('hotspot_name')
     
     if mac:
@@ -213,7 +283,7 @@ def login():
         if active_v and active_v['status'] == 'active':
             return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={active_v['code']}")
 
-    return render_template('login.html', mac=mac, gw_url=gw_url, hotspot_name=hotspot_name)
+    return render_template('login.html', mac=mac, gw_url=gw_url, voucher=voucher, hotspot_name=hotspot_name)
 
 @app.route('/auth', methods=['POST'])
 def authenticate():
@@ -293,14 +363,80 @@ def admin_logout():
 @admin_required
 def admin_dashboard():
     cleanup_expired_vouchers() # Ensure we see accurate data
+    
+    search = request.args.get('search', '').strip().upper()
+    status_filter = request.args.get('status', '')
+    
     conn = sqlite3.connect('hotspot.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM vouchers ORDER BY created_at DESC")
+    
+    query = "SELECT * FROM vouchers WHERE 1=1"
+    params = []
+    
+    if search:
+        query += " AND code LIKE ?"
+        params.append(f"%{search}%")
+    if status_filter:
+        query += " AND status = ?"
+        params.append(status_filter)
+        
+    # Order: Active first, then Unused, then Expired at the very bottom
+    query += """ ORDER BY 
+                 CASE 
+                    WHEN status='active' THEN 0 
+                    WHEN status='unused' THEN 1 
+                    ELSE 2 
+                 END, created_at DESC"""
+                 
+    c.execute(query, params)
     all_vouchers = c.fetchall()
     conn.close()
     
     stats = get_all_stats()
-    return render_template('admin.html', vouchers=all_vouchers, stats=stats)
+    revenue_chart = get_daily_revenue()
+    return render_template('admin.html', 
+                         vouchers=all_vouchers, 
+                         stats=stats, 
+                         search=search, 
+                         status_filter=status_filter,
+                         revenue_chart=revenue_chart)
+
+@app.route('/admin/export')
+@admin_required
+def export_vouchers():
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    # Also include history in export? For now, just active table.
+    c.execute("SELECT code, duration_days, status, created_at, activated_at, mac_address, expires_at FROM vouchers")
+    rows = c.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Code', 'Duration (Days)', 'Status', 'Created At', 'Activated At', 'MAC Address', 'Expires At'])
+    writer.writerows(rows)
+    
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=vouchers_export.csv"}
+    )
+
+@app.route('/qr/<code>')
+def generate_qr(code):
+    portal_url = get_setting('portal_url', 'http://your-server-ip:5000/login')
+    # Append the voucher code to the login URL
+    url = f"{portal_url}?voucher={code}"
+    
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    img_io = io.BytesIO()
+    img.save(img_io, 'PNG')
+    img_io.seek(0)
+    return send_file(img_io, mimetype='image/png')
 
 @app.route('/admin/online')
 @admin_required
@@ -359,6 +495,18 @@ def generate():
     
     flash(f"Generated {count} vouchers ({duration} days).")
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/delete/<int:voucher_id>')
+@admin_required
+def delete_voucher(voucher_id):
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM vouchers WHERE id=?", (voucher_id,))
+    conn.commit()
+    conn.close()
+    flash("Voucher deleted successfully.")
+    # Preserve search/filter if they exist
+    return redirect(url_for('admin_dashboard', search=request.args.get('search'), status=request.args.get('status')))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
