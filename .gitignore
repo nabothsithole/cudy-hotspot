@@ -1,4 +1,6 @@
 venv/
 *.pyc
 __pycache__/
+.env
 hotspot.db
+.DS_Store

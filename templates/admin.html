@@ -59,6 +59,7 @@
         <hr>
         <a href="/admin" style="background: #34495e; padding-left: 10px;">Voucher Management</a>
         <a href="/admin/online">Users Online</a>
+        <a href="/admin/analytics">Analytics</a>
         <a href="/admin/settings">Settings</a>
         <a href="/admin/export" style="color: #f39c12; margin-top: 20px;"><i class="fa-solid fa-file-export"></i> Export CSV</a>
         <div style="position: absolute; bottom: 20px; font-size: 12px; opacity: 0.6;">
@@ -90,10 +91,6 @@
                 <h3>Lifetime Generated</h3>
                 <p>{{ stats.total_vouchers_generated|int }}</p>
             </div>
-        </div>
-
-        <div class="chart-container">
-            <canvas id="revenueChart"></canvas>
         </div>
         
         <div class="filter-box">
@@ -167,29 +164,6 @@
     </div>
 
     <script>
-        // Chart.js initialization
-        const ctx = document.getElementById('revenueChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: {{ revenue_chart.days|tojson }},
-                datasets: [{
-                    label: 'Daily Revenue ($)',
-                    data: {{ revenue_chart.revenues|tojson }},
-                    backgroundColor: 'rgba(52, 152, 219, 0.6)',
-                    borderColor: 'rgba(52, 152, 219, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true }
-                }
-            }
-        });
-
         function setDuration(d) {
             document.getElementById('gen_duration').value = d;
             updateGenButton();

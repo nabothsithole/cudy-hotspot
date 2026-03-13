@@ -18,6 +18,14 @@ app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'default-secret-key')
 bcrypt = Bcrypt(app)
 
+# --- DATABASE CONFIG ---
+# On Render, use a Persistent Disk path like /data/hotspot.db
+DB_PATH = os.getenv('DATABASE_PATH', 'hotspot.db')
+
+# Helper to get DB connection
+def get_db_conn():
+    return sqlite3.connect(DB_PATH)
+
 # --- HELPER: PRICING ---
 def get_voucher_price(duration):
     if duration == 1: return 1
@@ -27,7 +35,7 @@ def get_voucher_price(duration):
 
 # --- DATABASE SETUP ---
 def init_db():
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     # Active Vouchers table
     c.execute('''CREATE TABLE IF NOT EXISTS vouchers (
@@ -99,7 +107,7 @@ def init_db():
 
 def sync_stats():
     """Backfills stats from existing database records to ensure accuracy."""
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     
     # 1. Count Total Generated (Active table + History table)
@@ -137,7 +145,7 @@ init_db()
 
 # --- HELPER: UPDATE STATS ---
 def update_stat(key, increment):
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("UPDATE stats SET value = value + ? WHERE key = ?", (increment, key))
     conn.commit()
@@ -145,7 +153,7 @@ def update_stat(key, increment):
 
 # --- HELPER: GET STATS ---
 def get_all_stats():
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT key, value FROM stats")
     res = dict(c.fetchall())
@@ -154,7 +162,7 @@ def get_all_stats():
 
 # --- HELPER: GET DAILY REVENUE (Last 7 Days) ---
 def get_daily_revenue():
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     days = []
     revenues = []
@@ -183,7 +191,7 @@ def get_daily_revenue():
 
 # --- HELPER: CLEANUP EXPIRED VOUCHERS (Global) ---
 def cleanup_expired_vouchers():
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     now = datetime.now()
     
@@ -212,7 +220,7 @@ def cleanup_expired_vouchers():
 
 # --- HELPER: GET SETTING ---
 def get_setting(key, default=None):
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT value FROM settings WHERE key=?", (key,))
     res = c.fetchone()
@@ -230,7 +238,7 @@ def admin_required(f):
 
 # --- HELPER: GET VOUCHER STATUS (Live Calculation) ---
 def get_live_voucher(code_or_mac, is_mac=False):
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     if is_mac:
         c.execute("SELECT * FROM vouchers WHERE mac_address=? AND status='active'", (code_or_mac,))
@@ -306,7 +314,7 @@ def authenticate():
         return redirect(url_for('login', mac=mac, gw_url=gw_url))
 
     if v['status'] == 'unused':
-        conn = sqlite3.connect('hotspot.db')
+        conn = get_db_conn()
         c = conn.cursor()
         now = datetime.now()
         c.execute("SELECT duration_days FROM vouchers WHERE id=?", (v['id'],))
@@ -336,7 +344,7 @@ def verify_status(mac):
 @app.route('/admin/print')
 @admin_required
 def print_vouchers():
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT code, duration_days FROM vouchers WHERE status='unused' ORDER BY created_at DESC")
     unused = c.fetchall()
@@ -367,7 +375,7 @@ def admin_dashboard():
     search = request.args.get('search', '').strip().upper()
     status_filter = request.args.get('status', '')
     
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     
     query = "SELECT * FROM vouchers WHERE 1=1"
@@ -393,18 +401,23 @@ def admin_dashboard():
     conn.close()
     
     stats = get_all_stats()
-    revenue_chart = get_daily_revenue()
     return render_template('admin.html', 
                          vouchers=all_vouchers, 
                          stats=stats, 
                          search=search, 
-                         status_filter=status_filter,
-                         revenue_chart=revenue_chart)
+                         status_filter=status_filter)
+
+@app.route('/admin/analytics')
+@admin_required
+def admin_analytics():
+    stats = get_all_stats()
+    revenue_chart = get_daily_revenue()
+    return render_template('admin_analytics.html', stats=stats, revenue_chart=revenue_chart)
 
 @app.route('/admin/export')
 @admin_required
 def export_vouchers():
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     # Also include history in export? For now, just active table.
     c.execute("SELECT code, duration_days, status, created_at, activated_at, mac_address, expires_at FROM vouchers")
@@ -442,7 +455,7 @@ def generate_qr(code):
 @admin_required
 def admin_online():
     cleanup_expired_vouchers() # Remove expired ones first
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     five_mins_ago = (datetime.now() - timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S.%f")
     c.execute("SELECT * FROM vouchers WHERE status='active' AND last_seen > ? ORDER BY last_seen DESC", (five_mins_ago,))
@@ -457,7 +470,7 @@ def admin_settings():
         hotspot_name = request.form.get('hotspot_name')
         new_password = request.form.get('password')
         
-        conn = sqlite3.connect('hotspot.db')
+        conn = get_db_conn()
         c = conn.cursor()
         c.execute("UPDATE settings SET value=? WHERE key='hotspot_name'", (hotspot_name,))
         
@@ -482,7 +495,7 @@ def generate():
     count = int(request.form.get('count', 10))
     duration = int(request.form.get('duration', 1))
     
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     for _ in range(count):
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -499,7 +512,7 @@ def generate():
 @app.route('/admin/delete/<int:voucher_id>')
 @admin_required
 def delete_voucher(voucher_id):
-    conn = sqlite3.connect('hotspot.db')
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM vouchers WHERE id=?", (voucher_id,))
     conn.commit()
