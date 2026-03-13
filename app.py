@@ -290,14 +290,22 @@ def get_live_voucher(code_or_mac, is_mac=False):
 @app.route('/')
 @app.route('/login')
 def login():
-    mac = request.args.get('mac')
-    gw_url = request.args.get('gw_url')
+    # Detect MAC address from various brands (Cudy, TP-Link, UniFi, MikroTik)
+    mac = request.args.get('mac') or request.args.get('clientMac') or request.args.get('id')
+    
+    # Detect Gateway Return URL
+    gw_url = request.args.get('gw_url') or request.args.get('target') or request.args.get('url') or request.args.get('link-login-only')
+    
     voucher = request.args.get('voucher', '') # Pre-fill from QR code
     hotspot_name = get_setting('hotspot_name')
     
-    if mac:
+    if mac and gw_url:
         active_v = get_live_voucher(mac, is_mac=True)
         if active_v and active_v['status'] == 'active':
+            # Handle brand-specific auth success redirects
+            if 'clientMac' in request.args: # TP-Link style
+                separator = '&' if '?' in gw_url else '?'
+                return redirect(f"{gw_url}{separator}status=success&clientMac={mac}&voucher={active_v['code']}")
             return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={active_v['code']}")
 
     return render_template('login.html', mac=mac, gw_url=gw_url, voucher=voucher, hotspot_name=hotspot_name)
@@ -339,6 +347,14 @@ def authenticate():
         update_stat('total_revenue', get_voucher_price(duration))
 
     if gw_url:
+        # Detect brand for redirection format
+        is_tplink = 'clientMac' in request.form or 'target' in request.form
+        separator = '&' if '?' in gw_url else '?'
+        
+        if is_tplink:
+             return redirect(f"{gw_url}{separator}status=success&clientMac={mac}&voucher={code}")
+        
+        # Default Cudy / Standard style
         return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={code}")
     
     return render_template('success.html', code=code)
