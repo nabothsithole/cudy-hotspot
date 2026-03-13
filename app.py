@@ -18,6 +18,13 @@ app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'default-secret-key')
 bcrypt = Bcrypt(app)
 
+# --- HELPER: PRICING ---
+def get_voucher_price(duration):
+    if duration == 1: return 1
+    if duration == 7: return 5
+    if duration == 30: return 10
+    return duration # $1 per day for any other duration
+
 # --- DATABASE SETUP ---
 def init_db():
     conn = sqlite3.connect('hotspot.db')
@@ -127,13 +134,6 @@ def sync_stats():
     conn.close()
 
 init_db()
-
-# --- HELPER: PRICING ---
-def get_voucher_price(duration):
-    if duration == 1: return 1
-    if duration == 7: return 5
-    if duration == 30: return 10
-    return duration # $1 per day for any other duration
 
 # --- HELPER: UPDATE STATS ---
 def update_stat(key, increment):
