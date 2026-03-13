@@ -19,7 +19,7 @@ bcrypt = Bcrypt(app)
 def init_db():
     conn = sqlite3.connect('hotspot.db')
     c = conn.cursor()
-    # Vouchers table
+    # Active Vouchers table
     c.execute('''CREATE TABLE IF NOT EXISTS vouchers (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  code TEXT UNIQUE,
@@ -32,10 +32,30 @@ def init_db():
                  last_seen DATETIME
                  )''')
     
+    # Voucher History table (for auditing and archiving)
+    c.execute('''CREATE TABLE IF NOT EXISTS voucher_history (
+                 id INTEGER PRIMARY KEY,
+                 code TEXT,
+                 duration_days INTEGER,
+                 status TEXT,
+                 created_at DATETIME,
+                 activated_at DATETIME,
+                 mac_address TEXT,
+                 expires_at DATETIME,
+                 last_seen DATETIME,
+                 archived_at DATETIME
+                 )''')
+    
     # Settings table
     c.execute('''CREATE TABLE IF NOT EXISTS settings (
                  key TEXT PRIMARY KEY,
                  value TEXT
+                 )''')
+
+    # Stats table (for lifetime metrics)
+    c.execute('''CREATE TABLE IF NOT EXISTS stats (
+                 key TEXT PRIMARY KEY,
+                 value REAL
                  )''')
     
     # MIGRATION: Check if last_seen exists in vouchers (safety for existing DBs)
@@ -53,19 +73,71 @@ def init_db():
     
     for key, value in default_settings.items():
         c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value))
+
+    # Initialize stats
+    default_stats = {
+        'total_vouchers_generated': 0,
+        'total_vouchers_used': 0,
+        'total_revenue': 0
+    }
+    for key, value in default_stats.items():
+        c.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, ?)", (key, value))
         
     conn.commit()
     conn.close()
 
 init_db()
 
+# --- HELPER: PRICING ---
+def get_voucher_price(duration):
+    if duration == 1: return 1
+    if duration == 7: return 5
+    if duration == 30: return 10
+    return 0
+
+# --- HELPER: UPDATE STATS ---
+def update_stat(key, increment):
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    c.execute("UPDATE stats SET value = value + ? WHERE key = ?", (increment, key))
+    conn.commit()
+    conn.close()
+
+# --- HELPER: GET STATS ---
+def get_all_stats():
+    conn = sqlite3.connect('hotspot.db')
+    c = conn.cursor()
+    c.execute("SELECT key, value FROM stats")
+    res = dict(c.fetchall())
+    conn.close()
+    return res
+
 # --- HELPER: CLEANUP EXPIRED VOUCHERS (Global) ---
 def cleanup_expired_vouchers():
     conn = sqlite3.connect('hotspot.db')
     c = conn.cursor()
     now = datetime.now()
-    # Batch update any active voucher whose expiry time has passed
+    
+    # 1. Mark active vouchers as expired
     c.execute("UPDATE vouchers SET status='expired' WHERE status='active' AND expires_at < ?", (now,))
+    
+    # 2. Archive vouchers expired for more than 10 days
+    ten_days_ago = (now - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S.%f")
+    
+    # Select expired vouchers older than 10 days
+    c.execute("SELECT * FROM vouchers WHERE status='expired' AND expires_at < ?", (ten_days_ago,))
+    to_archive = c.fetchall()
+    
+    for v in to_archive:
+        # Insert into history table
+        c.execute('''INSERT INTO voucher_history 
+                     (id, code, duration_days, status, created_at, activated_at, mac_address, expires_at, last_seen, archived_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], now))
+        
+        # Delete from active table
+        c.execute("DELETE FROM vouchers WHERE id=?", (v[0],))
+        
     conn.commit()
     conn.close()
 
@@ -106,7 +178,12 @@ def get_live_voucher(code_or_mac, is_mac=False):
     
     # LIVE CHECK: If it's active but the time is past, mark as expired now
     if status == 'active' and expires_str:
-        expires_at = datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S.%f")
+        try:
+            expires_at = datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S.%f")
+        except ValueError:
+            # Fallback for formats without microseconds if any
+            expires_at = datetime.strptime(expires_str.split('.')[0], "%Y-%m-%d %H:%M:%S")
+
         if datetime.now() > expires_at:
             c.execute("UPDATE vouchers SET status='expired' WHERE id=?", (v_id,))
             conn.commit()
@@ -169,6 +246,10 @@ def authenticate():
                   (now, mac, expiry, now, v['id']))
         conn.commit()
         conn.close()
+        
+        # Update Lifetime Stats
+        update_stat('total_vouchers_used', 1)
+        update_stat('total_revenue', get_voucher_price(duration))
 
     if gw_url:
         return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={code}")
@@ -217,7 +298,9 @@ def admin_dashboard():
     c.execute("SELECT * FROM vouchers ORDER BY created_at DESC")
     all_vouchers = c.fetchall()
     conn.close()
-    return render_template('admin.html', vouchers=all_vouchers)
+    
+    stats = get_all_stats()
+    return render_template('admin.html', vouchers=all_vouchers, stats=stats)
 
 @app.route('/admin/online')
 @admin_required
@@ -271,6 +354,9 @@ def generate():
                   (f"ZIM-{code}", duration, datetime.now()))
     conn.commit()
     conn.close()
+    
+    update_stat('total_vouchers_generated', count)
+    
     flash(f"Generated {count} vouchers ({duration} days).")
     return redirect(url_for('admin_dashboard'))
 
