@@ -26,16 +26,31 @@ DB_PATH = os.getenv('DATABASE_PATH', 'hotspot.db')
 def get_db_conn():
     return sqlite3.connect(DB_PATH)
 
+# --- HELPER: GET SETTING ---
+def get_setting(key, default=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("SELECT value FROM settings WHERE key=?", (key,))
+        res = c.fetchone()
+        conn.close()
+        return res[0] if res else default
+    except Exception:
+        return default
+
 # --- HELPER: PRICING ---
 def get_voucher_price(duration):
-    p1 = float(get_setting('price_1d', 1))
-    p7 = float(get_setting('price_7d', 5))
-    p30 = float(get_setting('price_30d', 10))
-    
-    if duration == 1: return p1
-    if duration == 7: return p7
-    if duration == 30: return p30
-    return duration # Default $1 per day
+    try:
+        p1 = float(get_setting('price_1d', 1))
+        p7 = float(get_setting('price_7d', 5))
+        p30 = float(get_setting('price_30d', 10))
+        
+        if duration == 1: return p1
+        if duration == 7: return p7
+        if duration == 30: return p30
+        return float(duration) # Default $1 per day
+    except Exception:
+        return float(duration)
 
 # --- DATABASE SETUP ---
 def init_db():
@@ -115,39 +130,40 @@ def init_db():
 
 def sync_stats():
     """Backfills stats from existing database records to ensure accuracy."""
-    conn = get_db_conn()
-    c = conn.cursor()
-    
-    # 1. Count Total Generated (Active table + History table)
-    c.execute("SELECT COUNT(*) FROM vouchers")
-    active_count = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM voucher_history")
-    history_count = c.fetchone()[0]
-    total_generated = active_count + history_count
-    
-    # 2. Count Total Used (Active with status 'active'/'expired' + History)
-    c.execute("SELECT COUNT(*) FROM vouchers WHERE status IN ('active', 'expired')")
-    active_used = c.fetchone()[0]
-    total_used = active_used + history_count
-    
-    # 3. Calculate Total Revenue
-    # We'll sum based on duration_days for all used/history vouchers
-    c.execute("SELECT duration_days FROM vouchers WHERE status IN ('active', 'expired')")
-    active_durations = c.fetchall()
-    c.execute("SELECT duration_days FROM voucher_history")
-    history_durations = c.fetchall()
-    
-    total_rev = 0
-    for (d,) in active_durations + history_durations:
-        total_rev += get_voucher_price(d)
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
         
-    # Update the stats table
-    c.execute("UPDATE stats SET value = ? WHERE key = 'total_vouchers_generated'", (total_generated,))
-    c.execute("UPDATE stats SET value = ? WHERE key = 'total_vouchers_used'", (total_used,))
-    c.execute("UPDATE stats SET value = ? WHERE key = 'total_revenue'", (total_rev,))
-    
-    conn.commit()
-    conn.close()
+        # 1. Count Total Generated
+        c.execute("SELECT COUNT(*) FROM vouchers")
+        active_count = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM voucher_history")
+        history_count = c.fetchone()[0]
+        total_generated = active_count + history_count
+        
+        # 2. Count Total Used
+        c.execute("SELECT COUNT(*) FROM vouchers WHERE status IN ('active', 'expired')")
+        active_used = c.fetchone()[0]
+        total_used = active_used + history_count
+        
+        # 3. Calculate Total Revenue
+        c.execute("SELECT duration_days FROM vouchers WHERE status IN ('active', 'expired')")
+        active_durations = c.fetchall()
+        c.execute("SELECT duration_days FROM voucher_history")
+        history_durations = c.fetchall()
+        
+        total_rev = 0
+        for (d,) in active_durations + history_durations:
+            total_rev += get_voucher_price(d)
+            
+        c.execute("UPDATE stats SET value = ? WHERE key = 'total_vouchers_generated'", (total_generated,))
+        c.execute("UPDATE stats SET value = ? WHERE key = 'total_vouchers_used'", (total_used,))
+        c.execute("UPDATE stats SET value = ? WHERE key = 'total_revenue'", (total_rev,))
+        
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 init_db()
 
@@ -174,25 +190,22 @@ def get_daily_revenue():
     c = conn.cursor()
     days = []
     revenues = []
-    # Ensure tables exist before querying
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='voucher_history'")
-    if not c.fetchone():
-        return {"days": [], "revenues": []}
-
-    for i in range(6, -1, -1):
-        date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
-        # Sum revenue from history and active vouchers for this date
-        c.execute("SELECT duration_days FROM voucher_history WHERE activated_at LIKE ?", (f"{date}%",))
-        hist_durations = c.fetchall()
-        c.execute("SELECT duration_days FROM vouchers WHERE status IN ('active', 'expired') AND activated_at LIKE ?", (f"{date}%",))
-        active_durations = c.fetchall()
-        
-        daily_total = 0
-        for (d,) in hist_durations + active_durations:
-            daily_total += get_voucher_price(d)
-        
-        days.append(date)
-        revenues.append(daily_total)
+    try:
+        for i in range(6, -1, -1):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            c.execute("SELECT duration_days FROM voucher_history WHERE activated_at LIKE ?", (f"{date}%",))
+            hist_durations = c.fetchall()
+            c.execute("SELECT duration_days FROM vouchers WHERE status IN ('active', 'expired') AND activated_at LIKE ?", (f"{date}%",))
+            active_durations = c.fetchall()
+            
+            daily_total = 0
+            for (d,) in hist_durations + active_durations:
+                daily_total += get_voucher_price(d)
+            
+            days.append(date)
+            revenues.append(daily_total)
+    except Exception:
+        pass
     
     conn.close()
     return {"days": days, "revenues": revenues}
@@ -202,39 +215,21 @@ def cleanup_expired_vouchers():
     conn = get_db_conn()
     c = conn.cursor()
     now = datetime.now()
-    
-    # 1. Mark active vouchers as expired
     c.execute("UPDATE vouchers SET status='expired' WHERE status='active' AND expires_at < ?", (now,))
     
-    # 2. Archive vouchers expired for more than X days
     days = int(get_setting('cleanup_days', 10))
     threshold = (now - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S.%f")
-    
-    # Select expired vouchers older than threshold
     c.execute("SELECT * FROM vouchers WHERE status='expired' AND expires_at < ?", (threshold,))
     to_archive = c.fetchall()
     
     for v in to_archive:
-        # Insert into history table
         c.execute('''INSERT INTO voucher_history 
                      (id, code, duration_days, status, created_at, activated_at, mac_address, expires_at, last_seen, archived_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                   (v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], now))
-        
-        # Delete from active table
         c.execute("DELETE FROM vouchers WHERE id=?", (v[0],))
-        
     conn.commit()
     conn.close()
-
-# --- HELPER: GET SETTING ---
-def get_setting(key, default=None):
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT value FROM settings WHERE key=?", (key,))
-    res = c.fetchone()
-    conn.close()
-    return res[0] if res else default
 
 # --- SECURITY DECORATOR ---
 def admin_required(f):
@@ -259,15 +254,11 @@ def get_live_voucher(code_or_mac, is_mac=False):
         conn.close()
         return None
 
-    # ID, CODE, DURATION, STATUS, CREATED, ACTIVATED, MAC, EXPIRES, LAST_SEEN
     v_id, v_code, duration, status, created, activated, v_mac, expires_str, last_seen = v
-    
-    # LIVE CHECK: If it's active but the time is past, mark as expired now
     if status == 'active' and expires_str:
         try:
             expires_at = datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S.%f")
         except ValueError:
-            # Fallback for formats without microseconds if any
             expires_at = datetime.strptime(expires_str.split('.')[0], "%Y-%m-%d %H:%M:%S")
 
         if datetime.now() > expires_at:
@@ -275,7 +266,6 @@ def get_live_voucher(code_or_mac, is_mac=False):
             conn.commit()
             status = 'expired'
         else:
-            # Update last_seen if it's currently being verified/checked
             c.execute("UPDATE vouchers SET last_seen=? WHERE id=?", (datetime.now(), v_id))
             conn.commit()
             
@@ -290,20 +280,15 @@ def get_live_voucher(code_or_mac, is_mac=False):
 @app.route('/')
 @app.route('/login')
 def login():
-    # Detect MAC address from various brands (Cudy, TP-Link, UniFi, MikroTik)
     mac = request.args.get('mac') or request.args.get('clientMac') or request.args.get('id')
-    
-    # Detect Gateway Return URL
     gw_url = request.args.get('gw_url') or request.args.get('target') or request.args.get('url') or request.args.get('link-login-only')
-    
-    voucher = request.args.get('voucher', '') # Pre-fill from QR code
+    voucher = request.args.get('voucher', '')
     hotspot_name = get_setting('hotspot_name')
     
     if mac and gw_url:
         active_v = get_live_voucher(mac, is_mac=True)
         if active_v and active_v['status'] == 'active':
-            # Handle brand-specific auth success redirects
-            if 'clientMac' in request.args: # TP-Link style
+            if 'clientMac' in request.args:
                 separator = '&' if '?' in gw_url else '?'
                 return redirect(f"{gw_url}{separator}status=success&clientMac={mac}&voucher={active_v['code']}")
             return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={active_v['code']}")
@@ -317,7 +302,6 @@ def authenticate():
     gw_url = request.form.get('gw_url')
 
     v = get_live_voucher(code)
-
     if not v:
         flash("Invalid voucher code.")
         return redirect(url_for('login', mac=mac, gw_url=gw_url))
@@ -341,20 +325,14 @@ def authenticate():
                   (now, mac, expiry, now, v['id']))
         conn.commit()
         conn.close()
-        
-        # Update Lifetime Stats
         update_stat('total_vouchers_used', 1)
         update_stat('total_revenue', get_voucher_price(duration))
 
     if gw_url:
-        # Detect brand for redirection format
         is_tplink = 'clientMac' in request.form or 'target' in request.form
         separator = '&' if '?' in gw_url else '?'
-        
         if is_tplink:
              return redirect(f"{gw_url}{separator}status=success&clientMac={mac}&voucher={code}")
-        
-        # Default Cudy / Standard style
         return redirect(f"{gw_url}/auth?status=success&mac={mac}&voucher={code}")
     
     return render_template('success.html', code=code)
@@ -395,42 +373,25 @@ def admin_logout():
 @app.route('/admin')
 @admin_required
 def admin_dashboard():
-    cleanup_expired_vouchers() # Ensure we see accurate data
-    
+    cleanup_expired_vouchers()
     search = request.args.get('search', '').strip().upper()
     status_filter = request.args.get('status', '')
-    
     conn = get_db_conn()
     c = conn.cursor()
-    
     query = "SELECT * FROM vouchers WHERE 1=1"
     params = []
-    
     if search:
         query += " AND code LIKE ?"
         params.append(f"%{search}%")
     if status_filter:
         query += " AND status = ?"
         params.append(status_filter)
-        
-    # Order: Active first, then Unused, then Expired at the very bottom
-    query += """ ORDER BY 
-                 CASE 
-                    WHEN status='active' THEN 0 
-                    WHEN status='unused' THEN 1 
-                    ELSE 2 
-                 END, created_at DESC"""
-                 
+    query += """ ORDER BY CASE WHEN status='active' THEN 0 WHEN status='unused' THEN 1 ELSE 2 END, created_at DESC"""
     c.execute(query, params)
     all_vouchers = c.fetchall()
     conn.close()
-    
     stats = get_all_stats()
-    return render_template('admin.html', 
-                         vouchers=all_vouchers, 
-                         stats=stats, 
-                         search=search, 
-                         status_filter=status_filter)
+    return render_template('admin.html', vouchers=all_vouchers, stats=stats, search=search, status_filter=status_filter)
 
 @app.route('/admin/analytics')
 @admin_required
@@ -439,47 +400,10 @@ def admin_analytics():
     revenue_chart = get_daily_revenue()
     return render_template('admin_analytics.html', stats=stats, revenue_chart=revenue_chart)
 
-@app.route('/admin/export')
-@admin_required
-def export_vouchers():
-    conn = get_db_conn()
-    c = conn.cursor()
-    # Also include history in export? For now, just active table.
-    c.execute("SELECT code, duration_days, status, created_at, activated_at, mac_address, expires_at FROM vouchers")
-    rows = c.fetchall()
-    conn.close()
-    
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['Code', 'Duration (Days)', 'Status', 'Created At', 'Activated At', 'MAC Address', 'Expires At'])
-    writer.writerows(rows)
-    
-    return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-disposition": "attachment; filename=vouchers_export.csv"}
-    )
-
-@app.route('/qr/<code>')
-def generate_qr(code):
-    portal_url = get_setting('portal_url', 'http://your-server-ip:5000/login')
-    # Append the voucher code to the login URL
-    url = f"{portal_url}?voucher={code}"
-    
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(url)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    
-    img_io = io.BytesIO()
-    img.save(img_io, 'PNG')
-    img_io.seek(0)
-    return send_file(img_io, mimetype='image/png')
-
 @app.route('/admin/online')
 @admin_required
 def admin_online():
-    cleanup_expired_vouchers() # Remove expired ones first
+    cleanup_expired_vouchers()
     conn = get_db_conn()
     c = conn.cursor()
     five_mins_ago = (datetime.now() - timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -531,7 +455,6 @@ def admin_settings():
 def generate():
     count = int(request.form.get('count', 10))
     duration = int(request.form.get('duration', 1))
-    
     conn = get_db_conn()
     c = conn.cursor()
     for _ in range(count):
@@ -540,9 +463,7 @@ def generate():
                   (f"ZIM-{code}", duration, datetime.now()))
     conn.commit()
     conn.close()
-    
     update_stat('total_vouchers_generated', count)
-    
     flash(f"Generated {count} vouchers ({duration} days).")
     return redirect(url_for('admin_dashboard'))
 
@@ -555,8 +476,34 @@ def delete_voucher(voucher_id):
     conn.commit()
     conn.close()
     flash("Voucher deleted successfully.")
-    # Preserve search/filter if they exist
     return redirect(url_for('admin_dashboard', search=request.args.get('search'), status=request.args.get('status')))
+
+@app.route('/admin/export')
+@admin_required
+def export_vouchers():
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT code, duration_days, status, created_at, activated_at, mac_address, expires_at FROM vouchers")
+    rows = c.fetchall()
+    conn.close()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Code', 'Duration (Days)', 'Status', 'Created At', 'Activated At', 'MAC Address', 'Expires At'])
+    writer.writerows(rows)
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": "attachment; filename=vouchers_export.csv"})
+
+@app.route('/qr/<code>')
+def generate_qr(code):
+    portal_url = get_setting('portal_url', 'http://your-server-ip:5000/login')
+    url = f"{portal_url}?voucher={code}"
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    img_io = io.BytesIO()
+    img.save(img_io, 'PNG')
+    img_io.seek(0)
+    return send_file(img_io, mimetype='image/png')
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
