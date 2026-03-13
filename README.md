@@ -5,34 +5,41 @@ A high-performance, MikroTik-inspired Captive Portal and Voucher Management Syst
 ## 🚀 Key Features
 
 - **Professional Captive Portal:** Mobile-responsive login page for users to enter voucher codes.
-- **Smart Admin Dashboard:** Secure management area to generate vouchers and monitor active sessions.
-- **Dynamic Voucher Logic:** Generate unique codes with custom durations (1, 7, or 30 days).
-- **Live Expiry System:** "Fail-safe" logic that calculates expiry in real-time on every request.
-- **Printable Vouchers:** One-click "Print" view with a clean grid layout for selling physical vouchers.
+- **Smart Admin Dashboard:** Secure management area with real-time statistics and prioritized sorting.
+- **QR Code Integration:** Vouchers now include scan-to-connect QR codes for a faster user experience.
+- **Revenue Analytics:** Visual bar charts showing daily revenue for the last 7 days.
+- **Export & Download:** Save vouchers as high-quality PDFs or export all records to CSV for bookkeeping.
+- **Flexible Pricing:** Support for any duration (1D=$1, 7D=$5, 30D=$10, others=$1/day) with dynamic price calculation.
+- **Mobile-Optimized Admin:** Responsive dashboard with a card-based layout for management on-the-go.
+- **10-Day Auto-Archive:** Automatically moves expired vouchers to a history table after 10 days to maintain peak performance.
 - **MAC Address Binding:** Prevents voucher sharing by locking active codes to a specific device.
-- **Cudy Handshake:** Seamlessly redirects authenticated users back to the Cudy gateway.
 
 ## 📁 Project Structure
 
 ```text
 cudy-hotspot/
-├── app.py              # Main Flask Backend & Logic
-├── hotspot.db          # SQLite Database (Auto-generated)
-├── requirements.txt    # Python Dependencies
-├── .gitignore          # Keeps the repo clean (ignores venv/db)
+├── app.py              # Main Flask Backend, Pricing, and Analytics Logic
+├── hotspot.db          # SQLite Database (Auto-generated with Stats and History)
+├── requirements.txt    # Python Dependencies (Flask, qrcode, Bcrypt, etc.)
+├── .env                # Environment variables (Portal URL, Hotspot Name)
+├── .gitignore          # Keeps the repo clean (ignores venv/db/.env)
 ├── static/             # CSS/Images (Optional)
 └── templates/          # HTML Views
-    ├── login.html          # User Login Portal
+    ├── login.html          # User Login Portal (with QR pre-fill)
     ├── success.html        # Post-authentication screen
-    ├── admin.html          # Voucher Management Dashboard
-    ├── admin_login.html    # Secure Admin Access
-    └── print_vouchers.html # Professional Printing Layout
+    ├── admin.html          # Dashboard with Analytics and Filtering
+    ├── admin_login.html    # Secure Admin Access with Eye Icon Toggle
+    ├── admin_settings.html # Site Settings and Password Management
+    ├── admin_online.html   # Real-time Monitoring of Connected Users
+    └── print_vouchers.html # PDF/Print Layout with QR Codes
 ```
+...
+## 🔜 Future Enhancements
+- [ ] Integration with ZIM Fuel Pulse Dashboard.
+- [ ] Real-time bandwidth monitoring per user (via Cudy API).
+- [ ] Automated SMS/WhatsApp notifications for voucher purchases.
+- [ ] Multi-admin support with different permission levels.
 
-## 🛠 Installation & Setup
-
-### 1. Prerequisites
-- Python 3.10+
 - A Cudy AX3000 Access Point with "External Portal" support.
 
 ### 2. Local Setup
