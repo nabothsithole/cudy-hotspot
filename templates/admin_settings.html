@@ -1,74 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Settings - Hotspot Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; margin: 0; display: flex; }
-        .sidebar { width: 250px; background: #2c3e50; color: white; min-height: 100vh; padding: 20px; box-sizing: border-box; }
-        .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 0; opacity: 0.8; }
-        .sidebar a:hover { opacity: 1; background: #34495e; padding-left: 10px; transition: 0.3s; }
-        .main { flex: 1; padding: 40px; overflow-y: auto; }
+        :root {
+            --primary: #3498db;
+            --secondary: #2c3e50;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --bg: #f0f2f5;
+            --sidebar-width: 260px;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; display: flex; color: #333; }
         
-        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; max-width: 1000px; }
+        /* Sidebar */
+        .sidebar { width: var(--sidebar-width); background: var(--secondary); color: white; min-height: 100vh; padding: 0; display: flex; flex-direction: column; position: fixed; transition: 0.3s; z-index: 1000; }
+        .sidebar-header { padding: 30px 20px; text-align: center; background: rgba(0,0,0,0.1); }
+        .sidebar-header h2 { margin: 0; font-size: 20px; letter-spacing: 1px; }
+        .sidebar-nav { flex: 1; padding: 20px 0; }
+        .sidebar-nav a { color: rgba(255,255,255,0.7); text-decoration: none; display: flex; align-items: center; padding: 12px 25px; transition: 0.2s; border-left: 4px solid transparent; margin-bottom: 5px; }
+        .sidebar-nav a i { width: 25px; font-size: 18px; margin-right: 10px; }
+        .sidebar-nav a:hover { color: white; background: rgba(255,255,255,0.05); }
+        .sidebar-nav a.active { color: white; background: rgba(255,255,255,0.1); border-left-color: var(--primary); }
+        .sidebar-footer { padding: 20px; font-size: 11px; opacity: 0.5; border-top: 1px solid rgba(255,255,255,0.05); }
+
+        /* Main Content */
+        .main { flex: 1; margin-left: var(--sidebar-width); padding: 30px; box-sizing: border-box; width: calc(100% - var(--sidebar-width)); }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+
+        .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 30px; }
         .settings-section { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .settings-section h2 { margin-top: 0; font-size: 18px; color: #2c3e50; border-bottom: 2px solid #f0f2f5; padding-bottom: 10px; margin-bottom: 20px; }
+        .settings-section h2 { margin-top: 0; font-size: 16px; color: var(--secondary); border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
         
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 8px; color: #7f8c8d; font-size: 13px; font-weight: bold; text-transform: uppercase; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        input:focus { border-color: #3498db; outline: none; box-shadow: 0 0 0 2px rgba(52,152,219,0.2); }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #7f8c8d; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; transition: 0.2s; }
+        input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(52,152,219,0.1); }
         
-        .save-btn { background: #3498db; color: white; border: none; padding: 15px 30px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 20px; transition: 0.3s; }
-        .save-btn:hover { background: #2980b9; transform: translateY(-1px); }
-        
-        .flash { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 30px; border-left: 5px solid #2ecc71; }
+        .help-text { font-size: 11px; color: #95a5a6; margin-top: 5px; }
         .password-container { position: relative; }
         .password-container i { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #7f8c8d; }
         
-        .info-box { background: #e8f4fd; border-left: 5px solid #3498db; padding: 15px; border-radius: 6px; font-size: 13px; color: #2980b9; margin-top: 10px; }
-        .help-text { color: #95a5a6; font-size: 12px; margin-top: 5px; }
+        .btn-save { background: var(--primary); color: white; border: none; padding: 15px 40px; border-radius: 8px; cursor: pointer; font-weight: 700; width: 100%; max-width: 300px; transition: 0.2s; }
+        .btn-save:hover { background: #2980b9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(52,152,219,0.3); }
 
-        @media (max-width: 900px) {
+        .flash { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 25px; border-left: 5px solid var(--success); }
+
+        @media (max-width: 1024px) {
+            .sidebar { width: 70px; }
+            .sidebar-header h2, .sidebar-footer, .sidebar-nav span { display: none; }
+            .sidebar-nav a { justify-content: center; padding: 15px 0; }
+            .main { margin-left: 70px; width: calc(100% - 70px); }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; width: 100%; padding: 20px; }
             .settings-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <h2>Hotspot Admin</h2>
-        <p>Logged in as: Admin</p>
-        <hr>
-        <a href="/admin">Voucher Management</a>
-        <a href="/admin/online">Users Online</a>
-        <a href="/admin/analytics">Analytics</a>
-        <a href="/admin/settings" style="background: #34495e; padding-left: 10px;">Settings</a>
-        <a href="/admin/logout" style="color: #e74c3c; margin-top: 20px;">Logout</a>
-        <div style="position: absolute; bottom: 20px; font-size: 12px; opacity: 0.6;">
-            Developed by <strong>Naboth Sithole</strong><br>
-            Naboth Tech Solutions &copy; 2026
+        <div class="sidebar-header">
+            <h2><i class="fa-solid fa-wifi"></i> HOTSPOT</h2>
+        </div>
+        <div class="sidebar-nav">
+            <a href="/admin"><i class="fa-solid fa-ticket"></i> <span>Vouchers</span></a>
+            <a href="/admin/online"><i class="fa-solid fa-users"></i> <span>Online Users</span></a>
+            <a href="/admin/analytics"><i class="fa-solid fa-chart-line"></i> <span>Analytics</span></a>
+            <a href="/admin/settings" class="active"><i class="fa-solid fa-gear"></i> <span>Settings</span></a>
+            <a href="/admin/export" style="color: #f39c12; margin-top: 20px;"><i class="fa-solid fa-file-export"></i> <span>Export CSV</span></a>
+        </div>
+        <div class="sidebar-footer">
+            Naboth Tech Solutions<br>v2.0 &copy; 2026
         </div>
     </div>
+
     <div class="main">
-        <h1>Admin Settings</h1>
-        
+        <div class="header">
+            <h1>System Settings</h1>
+            <a href="/admin/logout" style="color: #e74c3c; text-decoration: none; font-weight: 600;"><i class="fa-solid fa-power-off"></i> Logout</a>
+        </div>
+
         {% with messages = get_flashed_messages() %}
           {% if messages %}
             {% for message in messages %}
-              <div class="flash"><i class="fa-solid fa-circle-check"></i> {{ message }}</div>
+              <div class="flash"><i class="fa-solid fa-check-circle"></i> {{ message }}</div>
             {% endfor %}
           {% endif %}
         {% endwith %}
 
         <form action="/admin/settings" method="POST">
             <div class="settings-grid">
-                <!-- Branding & Security -->
                 <div class="settings-section">
-                    <h2><i class="fa-solid fa-shield-halved"></i> Site & Security</h2>
+                    <h2><i class="fa-solid fa-display"></i> Site Branding</h2>
                     <div class="form-group">
                         <label>Hotspot Display Name</label>
-                        <input type="text" name="hotspot_name" value="{{ settings.hotspot_name }}" placeholder="e.g. Naboth Tech Wi-Fi">
-                        <div class="help-text">This is shown at the top of the user login page.</div>
+                        <input type="text" name="hotspot_name" value="{{ settings.hotspot_name }}">
+                        <div class="help-text">Visible to users on the login portal.</div>
                     </div>
                     <div class="form-group">
                         <label>Update Admin Password</label>
@@ -76,68 +111,54 @@
                             <input type="password" name="password" id="password" placeholder="Leave blank to keep current">
                             <i class="fa-solid fa-eye" id="togglePassword"></i>
                         </div>
-                        <div class="help-text">Choose a strong password to protect your dashboard.</div>
+                        <div class="help-text">Security for your admin dashboard.</div>
                     </div>
                 </div>
 
-                <!-- Pricing Configuration -->
                 <div class="settings-section">
-                    <h2><i class="fa-solid fa-tags"></i> Pricing ($)</h2>
+                    <h2><i class="fa-solid fa-money-bill-wave"></i> Pricing Configuration ($)</h2>
                     <div class="form-group">
-                        <label>1 Day Voucher Price</label>
+                        <label>1 Day Price</label>
                         <input type="number" step="0.01" name="price_1d" value="{{ settings.price_1d }}">
                     </div>
                     <div class="form-group">
-                        <label>7 Day Voucher Price</label>
+                        <label>7 Day Price</label>
                         <input type="number" step="0.01" name="price_7d" value="{{ settings.price_7d }}">
                     </div>
                     <div class="form-group">
-                        <label>30 Day Voucher Price</label>
+                        <label>30 Day Price</label>
                         <input type="number" step="0.01" name="price_30d" value="{{ settings.price_30d }}">
                     </div>
-                    <div class="help-text">Other durations are calculated at $1.00 per day.</div>
                 </div>
 
-                <!-- Database & Cleanup -->
                 <div class="settings-section">
                     <h2><i class="fa-solid fa-database"></i> Data Management</h2>
                     <div class="form-group">
                         <label>Auto-Archive Threshold (Days)</label>
                         <input type="number" name="cleanup_days" value="{{ settings.cleanup_days }}">
-                        <div class="help-text">Expired vouchers older than this will be moved to history.</div>
-                    </div>
-                    <div class="info-box">
-                        <i class="fa-solid fa-info-circle"></i> 
-                        Archiving keeps your active dashboard fast while preserving lifetime revenue stats.
+                        <div class="help-text">Moves expired tokens to history after X days.</div>
                     </div>
                 </div>
 
-                <!-- API & Integration -->
                 <div class="settings-section">
-                    <h2><i class="fa-solid fa-network-wired"></i> Cudy AP Config</h2>
+                    <h2><i class="fa-solid fa-link"></i> Hardware Integration</h2>
                     <div class="form-group">
                         <label>External Portal URL</label>
-                        <input type="text" value="{{ settings.portal_url }}" readonly style="background: #f9f9f9; color: #7f8c8d; cursor: not-allowed;">
-                        <div class="help-text">Copy this URL into your Cudy Access Point configuration.</div>
-                    </div>
-                    <div class="info-box" style="background: #fff3cd; border-color: #ffc107; color: #856404;">
-                        <strong>Note:</strong> To change the URL, update the <code>PORTAL_URL</code> in your Render environment variables.
+                        <input type="text" value="{{ settings.portal_url }}" readonly style="background: #f9f9f9; color: #95a5a6; cursor: not-allowed;">
+                        <div class="help-text">Copy this into your Cudy/TP-Link External Portal settings.</div>
                     </div>
                 </div>
             </div>
 
-            <div style="max-width: 1000px; margin-top: 20px;">
-                <button type="submit" class="save-btn">
-                    <i class="fa-solid fa-floppy-disk"></i> SAVE ALL SETTINGS
-                </button>
-            </div>
+            <button type="submit" class="btn-save">
+                <i class="fa-solid fa-floppy-disk"></i> SAVE ALL SETTINGS
+            </button>
         </form>
     </div>
 
     <script>
         const togglePassword = document.querySelector('#togglePassword');
         const password = document.querySelector('#password');
-
         togglePassword.addEventListener('click', function (e) {
             const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
             password.setAttribute('type', type);

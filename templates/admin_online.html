@@ -1,77 +1,115 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Online Users - Hotspot Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; margin: 0; display: flex; }
-        .sidebar { width: 250px; background: #2c3e50; color: white; min-height: 100vh; padding: 20px; box-sizing: border-box; }
-        .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 0; opacity: 0.8; }
-        .sidebar a:hover { opacity: 1; background: #34495e; padding-left: 10px; transition: 0.3s; }
-        .main { flex: 1; padding: 40px; overflow-y: auto; }
-        table { width: 100%; background: white; border-collapse: collapse; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #34495e; color: white; }
-        .status-online { color: #2ecc71; font-weight: bold; }
+        :root {
+            --primary: #3498db;
+            --secondary: #2c3e50;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --bg: #f0f2f5;
+            --sidebar-width: 260px;
+        }
 
-        /* Mobile Styles */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; display: flex; color: #333; }
+        
+        /* Sidebar */
+        .sidebar { width: var(--sidebar-width); background: var(--secondary); color: white; min-height: 100vh; padding: 0; display: flex; flex-direction: column; position: fixed; transition: 0.3s; z-index: 1000; }
+        .sidebar-header { padding: 30px 20px; text-align: center; background: rgba(0,0,0,0.1); }
+        .sidebar-header h2 { margin: 0; font-size: 20px; letter-spacing: 1px; }
+        .sidebar-nav { flex: 1; padding: 20px 0; }
+        .sidebar-nav a { color: rgba(255,255,255,0.7); text-decoration: none; display: flex; align-items: center; padding: 12px 25px; transition: 0.2s; border-left: 4px solid transparent; margin-bottom: 5px; }
+        .sidebar-nav a i { width: 25px; font-size: 18px; margin-right: 10px; }
+        .sidebar-nav a:hover { color: white; background: rgba(255,255,255,0.05); }
+        .sidebar-nav a.active { color: white; background: rgba(255,255,255,0.1); border-left-color: var(--primary); }
+        .sidebar-footer { padding: 20px; font-size: 11px; opacity: 0.5; border-top: 1px solid rgba(255,255,255,0.05); }
+
+        /* Main Content */
+        .main { flex: 1; margin-left: var(--sidebar-width); padding: 30px; box-sizing: border-box; width: calc(100% - var(--sidebar-width)); }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+
+        /* Table */
+        .table-container { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8f9fa; padding: 15px; text-align: left; font-size: 13px; font-weight: 600; color: #7f8c8d; border-bottom: 1px solid #eee; }
+        td { padding: 15px; font-size: 14px; border-bottom: 1px solid #eee; }
+        
+        .status-online { color: var(--success); font-weight: bold; display: flex; align-items: center; gap: 5px; }
+
+        @media (max-width: 1024px) {
+            .sidebar { width: 70px; }
+            .sidebar-header h2, .sidebar-footer, .sidebar-nav span { display: none; }
+            .sidebar-nav a { justify-content: center; padding: 15px 0; }
+            .main { margin-left: 70px; width: calc(100% - 70px); padding: 20px; }
+        }
+
         @media (max-width: 768px) {
-            body { flex-direction: column; }
-            .sidebar { width: 100%; min-height: auto; }
-            .main { padding: 20px; }
+            .sidebar { display: none; }
+            .main { margin-left: 0; width: 100%; padding: 15px; }
             table thead { display: none; }
             table, table tbody, table tr, table td { display: block; width: 100%; }
-            table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; box-sizing: border-box; }
-            table td { text-align: right; padding-left: 50%; position: relative; border-bottom: none; }
-            table td::before { content: attr(data-label); position: absolute; left: 10px; width: 45%; text-align: left; font-weight: bold; color: #7f8c8d; }
+            table tr { margin-bottom: 15px; border: 1px solid #eee; border-radius: 12px; padding: 10px; }
+            table td { text-align: right; padding: 10px; position: relative; border-bottom: 1px solid #f9f9f9; display: flex; align-items: center; justify-content: flex-end; }
+            table td::before { content: attr(data-label); position: absolute; left: 10px; font-weight: 600; color: #95a5a6; font-size: 12px; }
         }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <h2>Hotspot Admin</h2>
-        <p>Logged in as: Admin</p>
-        <hr>
-        <a href="/admin">Voucher Management</a>
-        <a href="/admin/online" style="background: #34495e; padding-left: 10px;">Users Online</a>
-        <a href="/admin/analytics">Analytics</a>
-        <a href="/admin/settings">Settings</a>
-        <a href="/admin/export" style="color: #f39c12; margin-top: 20px;"><i class="fa-solid fa-file-export"></i> Export CSV</a>
-        <div style="position: absolute; bottom: 20px; font-size: 12px; opacity: 0.6;">
-            Developed by <strong>Naboth Sithole</strong><br>
-            Naboth Tech Solutions &copy; 2026
+        <div class="sidebar-header">
+            <h2><i class="fa-solid fa-wifi"></i> HOTSPOT</h2>
+        </div>
+        <div class="sidebar-nav">
+            <a href="/admin"><i class="fa-solid fa-ticket"></i> <span>Vouchers</span></a>
+            <a href="/admin/online" class="active"><i class="fa-solid fa-users"></i> <span>Online Users</span></a>
+            <a href="/admin/analytics"><i class="fa-solid fa-chart-line"></i> <span>Analytics</span></a>
+            <a href="/admin/settings"><i class="fa-solid fa-gear"></i> <span>Settings</span></a>
+            <a href="/admin/export" style="color: #f39c12; margin-top: 20px;"><i class="fa-solid fa-file-export"></i> <span>Export CSV</span></a>
+        </div>
+        <div class="sidebar-footer">
+            Naboth Tech Solutions<br>v2.0 &copy; 2026
         </div>
     </div>
-    <div class="main">
-        <h1>Currently Online Devices</h1>
-        <p style="color: #7f8c8d; margin-bottom: 30px;">Devices that have been active in the last 5 minutes.</p>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>MAC Address</th>
-                    <th>Voucher Code</th>
-                    <th>Last Seen</th>
-                    <th>Expires At</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for v in vouchers %}
-                <tr>
-                    <td data-label="MAC Address"><code>{{ v[6] }}</code></td>
-                    <td data-label="Voucher"><strong>{{ v[1] }}</strong></td>
-                    <td data-label="Last Seen">{{ v[8] }}</td>
-                    <td data-label="Expires">{{ v[7] }}</td>
-                    <td data-label="Status"><span class="status-online"><i class="fa-solid fa-circle-dot"></i> ONLINE</span></td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" style="text-align: center; color: #7f8c8d; padding: 30px;">No devices currently online.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="main">
+        <div class="header">
+            <h1>Online Users</h1>
+            <a href="/admin/logout" style="color: #e74c3c; text-decoration: none; font-weight: 600;"><i class="fa-solid fa-power-off"></i> Logout</a>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>MAC ADDRESS</th>
+                        <th>VOUCHER CODE</th>
+                        <th>LAST SEEN</th>
+                        <th>EXPIRES AT</th>
+                        <th>STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vouchers %}
+                    <tr>
+                        <td data-label="MAC Address"><code>{{ v[6] }}</code></td>
+                        <td data-label="Voucher"><strong>{{ v[1] }}</strong></td>
+                        <td data-label="Last Seen" style="color: #7f8c8d; font-size: 12px;">{{ v[8] }}</td>
+                        <td data-label="Expires" style="color: #7f8c8d; font-size: 12px;">{{ v[7] }}</td>
+                        <td data-label="Status"><span class="status-online"><i class="fa-solid fa-circle-dot"></i> ONLINE</span></td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #7f8c8d; padding: 40px;">No devices currently active.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </body>
 </html>
