@@ -2,18 +2,24 @@
 <html>
 <head>
     <title>Admin Login</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: sans-serif; background: #2c3e50; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .login-card { background: white; padding: 40px; border-radius: 12px; text-align: center; width: 300px; }
         input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
         button { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        .password-container { position: relative; }
+        .password-container i { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #7f8c8d; }
     </style>
 </head>
 <body>
     <div class="login-card">
         <h2>Admin Access</h2>
         <form method="POST">
-            <input type="password" name="password" placeholder="Enter Admin Password" required autofocus>
+            <div class="password-container">
+                <input type="password" name="password" id="password" placeholder="Enter Admin Password" required autofocus>
+                <i class="fa-solid fa-eye" id="togglePassword"></i>
+            </div>
             <button type="submit">LOGIN</button>
         </form>
         {% with messages = get_flashed_messages() %}
@@ -22,5 +28,18 @@
             {% endif %}
         {% endwith %}
     </div>
+
+    <script>
+        const togglePassword = document.querySelector('#togglePassword');
+        const password = document.querySelector('#password');
+
+        togglePassword.addEventListener('click', function (e) {
+            // toggle the type attribute
+            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+            password.setAttribute('type', type);
+            // toggle the eye slash icon
+            this.classList.toggle('fa-eye-slash');
+        });
+    </script>
 </body>
 </html>
