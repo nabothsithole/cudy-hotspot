@@ -28,10 +28,14 @@ def get_db_conn():
 
 # --- HELPER: PRICING ---
 def get_voucher_price(duration):
-    if duration == 1: return 1
-    if duration == 7: return 5
-    if duration == 30: return 10
-    return duration # $1 per day for any other duration
+    p1 = float(get_setting('price_1d', 1))
+    p7 = float(get_setting('price_7d', 5))
+    p30 = float(get_setting('price_30d', 10))
+    
+    if duration == 1: return p1
+    if duration == 7: return p7
+    if duration == 30: return p30
+    return duration # Default $1 per day
 
 # --- DATABASE SETUP ---
 def init_db():
@@ -86,7 +90,11 @@ def init_db():
     default_settings = {
         'hotspot_name': os.getenv('HOTSPOT_NAME', 'Cudy AX3000 Hotspot'),
         'admin_password_hash': bcrypt.generate_password_hash(os.getenv('ADMIN_PASSWORD', 'naboth123')).decode('utf-8'),
-        'portal_url': os.getenv('PORTAL_URL', 'http://your-server-ip:5000/login')
+        'portal_url': os.getenv('PORTAL_URL', 'http://your-server-ip:5000/login'),
+        'price_1d': '1',
+        'price_7d': '5',
+        'price_30d': '10',
+        'cleanup_days': '10'
     }
     
     for key, value in default_settings.items():
@@ -198,11 +206,12 @@ def cleanup_expired_vouchers():
     # 1. Mark active vouchers as expired
     c.execute("UPDATE vouchers SET status='expired' WHERE status='active' AND expires_at < ?", (now,))
     
-    # 2. Archive vouchers expired for more than 10 days
-    ten_days_ago = (now - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S.%f")
+    # 2. Archive vouchers expired for more than X days
+    days = int(get_setting('cleanup_days', 10))
+    threshold = (now - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S.%f")
     
-    # Select expired vouchers older than 10 days
-    c.execute("SELECT * FROM vouchers WHERE status='expired' AND expires_at < ?", (ten_days_ago,))
+    # Select expired vouchers older than threshold
+    c.execute("SELECT * FROM vouchers WHERE status='expired' AND expires_at < ?", (threshold,))
     to_archive = c.fetchall()
     
     for v in to_archive:
@@ -469,10 +478,18 @@ def admin_settings():
     if request.method == 'POST':
         hotspot_name = request.form.get('hotspot_name')
         new_password = request.form.get('password')
+        price_1d = request.form.get('price_1d')
+        price_7d = request.form.get('price_7d')
+        price_30d = request.form.get('price_30d')
+        cleanup_days = request.form.get('cleanup_days')
         
         conn = get_db_conn()
         c = conn.cursor()
         c.execute("UPDATE settings SET value=? WHERE key='hotspot_name'", (hotspot_name,))
+        c.execute("UPDATE settings SET value=? WHERE key='price_1d'", (price_1d,))
+        c.execute("UPDATE settings SET value=? WHERE key='price_7d'", (price_7d,))
+        c.execute("UPDATE settings SET value=? WHERE key='price_30d'", (price_30d,))
+        c.execute("UPDATE settings SET value=? WHERE key='cleanup_days'", (cleanup_days,))
         
         if new_password and len(new_password) > 0:
             new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
@@ -485,7 +502,11 @@ def admin_settings():
     
     settings = {
         'hotspot_name': get_setting('hotspot_name'),
-        'portal_url': get_setting('portal_url')
+        'portal_url': get_setting('portal_url'),
+        'price_1d': get_setting('price_1d', '1'),
+        'price_7d': get_setting('price_7d', '5'),
+        'price_30d': get_setting('price_30d', '10'),
+        'cleanup_days': get_setting('cleanup_days', '10')
     }
     return render_template('admin_settings.html', settings=settings)
 

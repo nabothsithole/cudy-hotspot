@@ -2,16 +2,29 @@
 <html>
 <head>
     <title>Online Users - Hotspot Admin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: sans-serif; background: #f0f2f5; margin: 0; display: flex; }
-        .sidebar { width: 250px; background: #2c3e50; color: white; height: 100vh; padding: 20px; }
+        .sidebar { width: 250px; background: #2c3e50; color: white; min-height: 100vh; padding: 20px; box-sizing: border-box; }
+        .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 0; opacity: 0.8; }
+        .sidebar a:hover { opacity: 1; background: #34495e; padding-left: 10px; transition: 0.3s; }
         .main { flex: 1; padding: 40px; overflow-y: auto; }
         table { width: 100%; background: white; border-collapse: collapse; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
         th { background: #34495e; color: white; }
-        .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 0; opacity: 0.8; }
-        .sidebar a:hover { opacity: 1; background: #34495e; padding-left: 10px; transition: 0.3s; }
         .status-online { color: #2ecc71; font-weight: bold; }
+
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; min-height: auto; }
+            .main { padding: 20px; }
+            table thead { display: none; }
+            table, table tbody, table tr, table td { display: block; width: 100%; }
+            table tr { margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; box-sizing: border-box; }
+            table td { text-align: right; padding-left: 50%; position: relative; border-bottom: none; }
+            table td::before { content: attr(data-label); position: absolute; left: 10px; width: 45%; text-align: left; font-weight: bold; color: #7f8c8d; }
+        }
     </style>
 </head>
 <body>
@@ -23,6 +36,7 @@
         <a href="/admin/online" style="background: #34495e; padding-left: 10px;">Users Online</a>
         <a href="/admin/analytics">Analytics</a>
         <a href="/admin/settings">Settings</a>
+        <a href="/admin/export" style="color: #f39c12; margin-top: 20px;"><i class="fa-solid fa-file-export"></i> Export CSV</a>
         <div style="position: absolute; bottom: 20px; font-size: 12px; opacity: 0.6;">
             Developed by <strong>Naboth Sithole</strong><br>
             Naboth Tech Solutions &copy; 2026
@@ -30,7 +44,7 @@
     </div>
     <div class="main">
         <h1>Currently Online Devices</h1>
-        <p>Devices that have been active in the last 5 minutes.</p>
+        <p style="color: #7f8c8d; margin-bottom: 30px;">Devices that have been active in the last 5 minutes.</p>
 
         <table>
             <thead>
@@ -45,15 +59,15 @@
             <tbody>
                 {% for v in vouchers %}
                 <tr>
-                    <td><code>{{ v[6] }}</code></td>
-                    <td><strong>{{ v[1] }}</strong></td>
-                    <td>{{ v[8] }}</td>
-                    <td>{{ v[7] }}</td>
-                    <td><span class="status-online">ONLINE</span></td>
+                    <td data-label="MAC Address"><code>{{ v[6] }}</code></td>
+                    <td data-label="Voucher"><strong>{{ v[1] }}</strong></td>
+                    <td data-label="Last Seen">{{ v[8] }}</td>
+                    <td data-label="Expires">{{ v[7] }}</td>
+                    <td data-label="Status"><span class="status-online"><i class="fa-solid fa-circle-dot"></i> ONLINE</span></td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5" style="text-align: center; color: #7f8c8d;">No devices currently online.</td>
+                    <td colspan="5" style="text-align: center; color: #7f8c8d; padding: 30px;">No devices currently online.</td>
                 </tr>
                 {% endfor %}
             </tbody>
