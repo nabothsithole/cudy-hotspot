@@ -35,7 +35,7 @@ cudy-hotspot/
 ```
 ...
 ## 🔜 Future Enhancements
-- [ ] Integration with ZIM Fuel Pulse Dashboard.
+
 - [ ] Real-time bandwidth monitoring per user (via Cudy API).
 - [ ] Automated SMS/WhatsApp notifications for voucher purchases.
 - [ ] Multi-admin support with different permission levels.
@@ -71,7 +71,7 @@ python3 app.py
 - **Session Security:** Protected via Flask's secret key.
 
 ## 🔜 Future Enhancements
-- [ ] Integration with ZIM Fuel Pulse Dashboard.
+
 - [ ] Real-time bandwidth monitoring per user.
 - [ ] Automated SMS notifications for voucher purchases.
 

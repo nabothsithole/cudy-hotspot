@@ -17,6 +17,7 @@
         }
 
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; display: flex; color: #333; }
+        body.no-scroll { overflow: hidden; } /* Prevent scrolling when mobile menu is open */
         
         /* Sidebar */
         .sidebar { width: var(--sidebar-width); background: var(--secondary); color: white; min-height: 100vh; padding: 0; display: flex; flex-direction: column; position: fixed; transition: 0.3s; z-index: 1000; }
@@ -30,7 +31,8 @@
         .sidebar-footer { padding: 20px; font-size: 11px; opacity: 0.5; border-top: 1px solid rgba(255,255,255,0.05); }
 
         /* Main Content */
-        .main { flex: 1; margin-left: var(--sidebar-width); padding: 30px; box-sizing: border-box; width: calc(100% - var(--sidebar-width)); }
+        .main { flex: 1; margin-left: var(--sidebar-width); padding: 30px; box-sizing: border-box; width: calc(100% - var(--sidebar-width)); transition: margin-left 0.3s ease-in-out; } /* Added transition */
+        .main.menu-open { margin-left: 0; } /* Reset margin when mobile menu is open */
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
         .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
 
@@ -64,7 +66,7 @@
         .btn-gray { background: #95a5a6; color: white; }
 
         /* Table */
-        .table-container { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; }
+        .table-container { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; /* Allow horizontal scrolling on small screens */ }
         table { width: 100%; border-collapse: collapse; }
         th { background: #f8f9fa; padding: 15px; text-align: left; font-size: 13px; font-weight: 600; color: #7f8c8d; border-bottom: 1px solid #eee; }
         td { padding: 15px; font-size: 14px; border-bottom: 1px solid #eee; }
@@ -93,18 +95,77 @@
         }
 
         @media (max-width: 768px) {
-            .sidebar { display: none; } /* On very small screens, maybe a mobile menu later */
+            .sidebar { display: none; } /* Hide desktop sidebar on small screens */
             .main { margin-left: 0; width: 100%; padding: 15px; }
             .stats-grid { grid-template-columns: 1fr; }
             
             table thead { display: none; }
             table, table tbody, table tr, table td { display: block; width: 100%; }
             table tr { margin-bottom: 15px; border: 1px solid #eee; border-radius: 12px; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-            table td { text-align: right; padding: 10px; position: relative; border-bottom: 1px solid #f9f9f9; min-height: 40px; display: flex; align-items: center; justify-content: flex-end; }
+            table td { text-align: right; padding-left: 100px; /* Make space for the label */ position: relative; border-bottom: 1px solid #f9f9f9; min-height: 40px; display: flex; align-items: center; justify-content: flex-end; }
             table td:last-child { border-bottom: none; }
-            table td::before { content: attr(data-label); position: absolute; left: 10px; font-weight: 600; color: #95a5a6; font-size: 12px; }
+            table td::before { content: attr(data-label); position: absolute; left: 10px; font-weight: 600; color: #95a5a6; font-size: 12px; text-align: left; /* Ensure label is left-aligned */ width: 80px; /* Fixed width for labels */ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; /* Prevent label from wrapping */ }
             
             .header { flex-direction: column; align-items: flex-start; gap: 10px; }
+
+            /* Mobile Menu specific styles */
+            .mobile-menu-toggle { display: block; } /* Show hamburger on mobile */
+            .main.menu-open { transform: translateX(var(--sidebar-width)); } /* Push main content */
+        }
+
+        /* New Mobile Menu Styles */
+        .mobile-menu-toggle {
+            display: none; /* Hidden by default, shown in media query */
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1100; /* Above sidebar overlay */
+            background: var(--primary);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .mobile-sidebar {
+            position: fixed;
+            top: 0;
+            left: -100%; /* Start off-screen */
+            width: var(--sidebar-width);
+            background: var(--secondary);
+            color: white;
+            min-height: 100vh;
+            z-index: 1050;
+            transition: left 0.3s ease-in-out;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mobile-sidebar.active {
+            left: 0; /* Slide in */
+        }
+
+        .mobile-sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1040;
+            cursor: pointer;
+        }
+
+        .mobile-sidebar-overlay.active {
+            display: block;
         }
     </style>
 </head>
@@ -126,8 +187,23 @@
     </div>
 
     <div class="main">
-        <div class="header">
-            <h1>Voucher Management</h1>
+    <div class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+        <i class="fa-solid fa-bars"></i>
+    </div>
+    <div class="mobile-sidebar-overlay" onclick="toggleMobileMenu()"></div>
+    <div class="mobile-sidebar">
+        <div class="sidebar-header">
+            <h2><i class="fa-solid fa-wifi"></i> HOTSPOT</h2>
+        </div>
+        <div class="sidebar-nav">
+            <a href="/admin" class="active"><i class="fa-solid fa-ticket"></i> <span>Vouchers</span></a>
+            <a href="/admin/online"><i class="fa-solid fa-users"></i> <span>Online Users</span></a>
+            <a href="/admin/analytics"><i class="fa-solid fa-chart-line"></i> <span>Analytics</span></a>
+            <a href="/admin/settings"><i class="fa-solid fa-gear"></i> <span>Settings</span></a>
+            <a href="/admin/export" style="color: var(--warning); margin-top: 20px;"><i class="fa-solid fa-file-export"></i> <span>Export CSV</span></a>
+        </div>
+    </div>
+    <div class="header">            <h1>Voucher Management</h1>
             <a href="/admin/logout" class="btn" style="color: var(--danger);"><i class="fa-solid fa-power-off"></i> Logout</a>
         </div>
         
@@ -280,6 +356,16 @@
         }
 
         window.onload = updateGenButton;
+
+        function toggleMobileMenu() {
+            const mobileSidebar = document.querySelector('.mobile-sidebar');
+            const mobileOverlay = document.querySelector('.mobile-sidebar-overlay');
+            const body = document.body;
+
+            mobileSidebar.classList.toggle('active');
+            mobileOverlay.classList.toggle('active');
+            body.classList.toggle('no-scroll'); // Add a class to body to prevent scrolling
+        }
     </script>
 </body>
 </html>

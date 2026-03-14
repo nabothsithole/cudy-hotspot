@@ -460,7 +460,7 @@ def generate():
     for _ in range(count):
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         c.execute("INSERT INTO vouchers (code, duration_days, created_at) VALUES (?, ?, ?)",
-                  (f"ZIM-{code}", duration, datetime.now()))
+                  (f"VYINESoft-{code}", duration, datetime.now()))
     conn.commit()
     conn.close()
     update_stat('total_vouchers_generated', count)

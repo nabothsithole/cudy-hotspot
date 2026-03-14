@@ -30,7 +30,7 @@ The "Walled Garden" allows users to reach your login page *before* they have int
 ## 4. Testing the Connection
 1. Disconnect your phone from the Wi-Fi and reconnect.
 2. A "Sign in to Wi-Fi" notification should appear.
-3. Tap it, and you should see the **ZIM-Fuel Hotspot** login page.
+3. Tap it, and you should see the **VYINESoft Hotspot** login page.
 
 ---
 **Troubleshooting:**
