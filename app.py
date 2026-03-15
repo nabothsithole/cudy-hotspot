@@ -20,11 +20,16 @@ bcrypt = Bcrypt(app)
 
 # --- DATABASE CONFIG ---
 # On Render, use a Persistent Disk path like /data/hotspot.db
-DB_PATH = os.getenv('DATABASE_PATH', 'hotspot.db')
+# DB_PATH = os.getenv('DATABASE_PATH', 'hotspot.db') # Original line, commented out for clarity
 
 # Helper to get DB connection
 def get_db_conn():
-    return sqlite3.connect(DB_PATH)
+    # Read the environment variable dynamically within the function
+    # This ensures it picks up the correct path at runtime, especially in Docker.
+    db_path_env = os.getenv('DATABASE_PATH', 'hotspot.db')
+    # If running in a container where the path is explicitly set, use it. Otherwise, use the default.
+    # For Docker, ensure DATABASE_PATH=/app/data/hotspot.db is set.
+    return sqlite3.connect(db_path_env)
 
 # --- HELPER: GET SETTING ---
 def get_setting(key, default=None):
@@ -242,6 +247,7 @@ def admin_required(f):
 
 # --- HELPER: GET VOUCHER STATUS (Live Calculation) ---
 def get_live_voucher(code_or_mac, is_mac=False):
+    print(f"get_live_voucher: Searching with code_or_mac: {code_or_mac}, is_mac: {is_mac}") # DEBUG LOG
     conn = get_db_conn()
     c = conn.cursor()
     if is_mac:
@@ -249,6 +255,7 @@ def get_live_voucher(code_or_mac, is_mac=False):
     else:
         c.execute("SELECT * FROM vouchers WHERE code=?", (code_or_mac,))
     v = c.fetchone()
+    print(f"get_live_voucher: Raw DB result: {v}") # DEBUG LOG
     
     if not v:
         conn.close()
@@ -264,8 +271,7 @@ def get_live_voucher(code_or_mac, is_mac=False):
             try:
                 expires_at = datetime.strptime(expires_str.split('.')[0], "%Y-%m-%d %H:%M:%S")
             except ValueError:
-                # Log this error if possible, indicates a malformed date string in DB
-                print(f"Warning: Malformed expires_at string for voucher {v_code}: {expires_str}")
+                print(f"Warning: Malformed expires_at string for voucher {v_code}: {expires_str}") # DEBUG LOG
                 pass # expires_at remains None
 
     if status == 'active' and expires_at: # Only check expiration if status is active and expires_at is valid
@@ -277,11 +283,13 @@ def get_live_voucher(code_or_mac, is_mac=False):
             c.execute("UPDATE vouchers SET last_seen=? WHERE id=?", (datetime.now(), v_id))
             conn.commit()
             
-    conn.close()
-    return {
+    return_val = {
         "id": v_id, "code": v_code, "status": status, 
         "mac": v_mac, "expires_at": expires_str, "last_seen": last_seen
     }
+    print(f"get_live_voucher: Returning: {return_val}") # DEBUG LOG
+    conn.close()
+    return return_val
 
 # --- ROUTES ---
 
@@ -306,13 +314,17 @@ def login():
 @app.route('/auth', methods=['POST'])
 def authenticate():
     code = request.form.get('voucher').strip().upper()
+    print(f"Authenticate: Received voucher code from form: {code}") # DEBUG LOG
     mac = request.form.get('mac')
     gw_url = request.form.get('gw_url')
 
     v = get_live_voucher(code)
     if not v:
+        print(f"Authenticate: get_live_voucher returned None for code: {code}") # DEBUG LOG
         flash("Invalid voucher code.")
         return redirect(url_for('login', mac=mac, gw_url=gw_url))
+
+    print(f"Authenticate: get_live_voucher returned: {v}") # DEBUG LOG
 
     if v['status'] == 'active' and v['mac'] != mac:
         flash("Voucher is already in use by another device.")
