@@ -102,15 +102,53 @@
             table thead { display: none; }
             table, table tbody, table tr, table td { display: block; width: 100%; }
             table tr { margin-bottom: 15px; border: 1px solid #eee; border-radius: 12px; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-            table td { text-align: right; padding-left: 100px; /* Make space for the label */ position: relative; border-bottom: 1px solid #f9f9f9; min-height: 40px; display: flex; align-items: center; justify-content: flex-end; }
+            /* Adjusted TD styles for better data visibility */
+            table td {
+                text-align: left; /* Align content to the left */
+                padding: 10px 15px 10px 100px; /* Add padding to the left for the label */
+                position: relative;
+                border-bottom: 1px solid #f9f9f9;
+                min-height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: flex-start; /* Align content to the start */
+                flex-wrap: wrap; /* Allow content to wrap if necessary */
+            }
             table td:last-child { border-bottom: none; }
-            table td::before { content: attr(data-label); position: absolute; left: 10px; font-weight: 600; color: #95a5a6; font-size: 12px; text-align: left; /* Ensure label is left-aligned */ width: 80px; /* Fixed width for labels */ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; /* Prevent label from wrapping */ }
+            table td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 15px;
+                top: 10px;
+                font-weight: 600;
+                color: #95a5a6;
+                font-size: 12px;
+                width: 80px; /* Fixed width for labels */
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap; /* Prevent label from wrapping */
+            }
             
-            .header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            /* Adjusted Header for Mobile Menu */
+            .header {
+                flex-direction: row; /* Keep items on one line */
+                justify-content: space-between; /* Distribute space */
+                align-items: center; /* Vertically align items */
+                gap: 15px; /* Add some gap */
+                margin-bottom: 30px;
+            }
+            .header h1 {
+                font-size: 18px; /* Slightly smaller for mobile */
+                flex-grow: 1; /* Allow title to take available space */
+            }
+            .mobile-menu-toggle {
+                display: block; /* Show hamburger on mobile */
+                position: static; /* Remove fixed positioning */
+                margin-right: 10px; /* Add spacing */
+                order: -1; /* Place it before the title */
+            }
+            .main.menu-open { transform: translateX(0); } /* No translation needed, as menu slides over */
 
-            /* Mobile Menu specific styles */
-            .mobile-menu-toggle { display: block; } /* Show hamburger on mobile */
-            .main.menu-open { transform: translateX(var(--sidebar-width)); } /* Push main content */
         }
 
         /* New Mobile Menu Styles */
@@ -186,10 +224,6 @@
         </div>
     </div>
 
-    <div class="main">
-    <div class="mobile-menu-toggle" onclick="toggleMobileMenu()">
-        <i class="fa-solid fa-bars"></i>
-    </div>
     <div class="mobile-sidebar-overlay" onclick="toggleMobileMenu()"></div>
     <div class="mobile-sidebar">
         <div class="sidebar-header">
@@ -203,9 +237,15 @@
             <a href="/admin/export" style="color: var(--warning); margin-top: 20px;"><i class="fa-solid fa-file-export"></i> <span>Export CSV</span></a>
         </div>
     </div>
-    <div class="header">            <h1>Voucher Management</h1>
-            <a href="/admin/logout" class="btn" style="color: var(--danger);"><i class="fa-solid fa-power-off"></i> Logout</a>
+
+    <div class="main">
+    <div class="header">
+        <div class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+            <i class="fa-solid fa-bars"></i>
         </div>
+        <h1>Voucher Management</h1>
+        <a href="/admin/logout" class="btn" style="color: var(--danger);"><i class="fa-solid fa-power-off"></i> Logout</a>
+    </div>
         
         {% with messages = get_flashed_messages() %}
           {% if messages %}
@@ -299,13 +339,13 @@
             <table>
                 <thead>
                     <tr>
-                        <th>CODE</th>
-                        <th>DURATION</th>
-                        <th>STATUS</th>
-                        <th>MAC ADDRESS</th>
-                        <th>LAST SEEN</th>
-                        <th>EXPIRES AT</th>
-                        <th style="text-align: center;">ACTIONS</th>
+                        <th data-label="Code">CODE</th>
+                        <th data-label="Duration">DURATION</th>
+                        <th data-label="Status">STATUS</th>
+                        <th data-label="MAC Address">MAC ADDRESS</th>
+                        <th data-label="Last Seen">LAST SEEN</th>
+                        <th data-label="Expires">EXPIRES AT</th>
+                        <th data-label="Actions" style="text-align: center;">ACTIONS</th>
                     </tr>
                 </thead>
                 <tbody>
