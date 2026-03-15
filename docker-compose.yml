@@ -1,0 +1,16 @@
+services:
+  hotspot:
+    build: .
+    container_name: cudy-hotspot
+    restart: always
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_PATH=/app/data/hotspot.db
+    volumes:
+      - hotspot_data:/app/data
+
+volumes:
+  hotspot_data:
