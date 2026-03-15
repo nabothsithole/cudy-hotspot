@@ -255,12 +255,20 @@ def get_live_voucher(code_or_mac, is_mac=False):
         return None
 
     v_id, v_code, duration, status, created, activated, v_mac, expires_str, last_seen = v
-    if status == 'active' and expires_str:
+    
+    expires_at = None
+    if expires_str:
         try:
             expires_at = datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S.%f")
         except ValueError:
-            expires_at = datetime.strptime(expires_str.split('.')[0], "%Y-%m-%d %H:%M:%S")
+            try:
+                expires_at = datetime.strptime(expires_str.split('.')[0], "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                # Log this error if possible, indicates a malformed date string in DB
+                print(f"Warning: Malformed expires_at string for voucher {v_code}: {expires_str}")
+                pass # expires_at remains None
 
+    if status == 'active' and expires_at: # Only check expiration if status is active and expires_at is valid
         if datetime.now() > expires_at:
             c.execute("UPDATE vouchers SET status='expired' WHERE id=?", (v_id,))
             conn.commit()
