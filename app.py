@@ -221,7 +221,8 @@ def cleanup_expired_vouchers():
     conn = get_db_conn()
     c = conn.cursor()
     now = datetime.now()
-    c.execute("UPDATE vouchers SET status='expired' WHERE status='active' AND expires_at < ?", (now,))
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+    c.execute("UPDATE vouchers SET status='expired' WHERE status='active' AND expires_at < ?", (now_str,))
     
     days = int(get_setting('cleanup_days', 10))
     threshold = (now - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -281,7 +282,8 @@ def get_live_voucher(code_or_mac, is_mac=False):
             conn.commit()
             status = 'expired'
         else:
-            c.execute("UPDATE vouchers SET last_seen=? WHERE id=?", (datetime.now(), v_id))
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            c.execute("UPDATE vouchers SET last_seen=? WHERE id=?", (now_str, v_id))
             conn.commit()
             
     return_val = {
@@ -299,6 +301,11 @@ def get_live_voucher(code_or_mac, is_mac=False):
 def login():
     mac = request.args.get('mac') or request.args.get('clientMac') or request.args.get('id')
     gw_url = request.args.get('gw_url') or request.args.get('target') or request.args.get('url') or request.args.get('link-login-only')
+    
+    # Clean up "None" strings from URL parameters
+    if mac == "None": mac = None
+    if gw_url == "None": gw_url = None
+    
     voucher = request.args.get('voucher', '')
     hotspot_name = get_setting('hotspot_name')
     
@@ -318,6 +325,9 @@ def authenticate():
     print(f"Authenticate: Received voucher code from form: {code}") # DEBUG LOG
     mac = request.form.get('mac')
     gw_url = request.form.get('gw_url')
+
+    if mac == "None": mac = None
+    if gw_url == "None" or gw_url == "": gw_url = None
 
     v = get_live_voucher(code)
     if not v:
@@ -339,11 +349,13 @@ def authenticate():
         conn = get_db_conn()
         c = conn.cursor()
         now = datetime.now()
+        now_str = now.strftime("%Y-%m-%d %H:%M:%S.%f")
         c.execute("SELECT duration_days FROM vouchers WHERE id=?", (v['id'],))
         duration = c.fetchone()[0]
         expiry = now + timedelta(days=duration)
+        expiry_str = expiry.strftime("%Y-%m-%d %H:%M:%S.%f")
         c.execute("UPDATE vouchers SET status='active', activated_at=?, mac_address=?, expires_at=?, last_seen=? WHERE id=?",
-                  (now, mac, expiry, now, v['id']))
+                  (now_str, mac, expiry_str, now_str, v['id']))
         conn.commit()
         conn.close()
         update_stat('total_vouchers_used', 1)
@@ -480,8 +492,9 @@ def generate():
     c = conn.cursor()
     for _ in range(count):
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         c.execute("INSERT INTO vouchers (code, duration_days, created_at) VALUES (?, ?, ?)",
-                  (f"VYINESoft-{code}", duration, datetime.now()))
+                  (f"VYINESOFT-{code}", duration, now_str))
     conn.commit()
     conn.close()
     update_stat('total_vouchers_generated', count)
