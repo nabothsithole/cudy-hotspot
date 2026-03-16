@@ -118,7 +118,8 @@ def init_db():
     }
     
     for key, value in default_settings.items():
-        c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value))
+        # Insert or replace default settings if they don't exist
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
 
     # Initialize stats
     default_stats = {
@@ -526,4 +527,4 @@ def generate_qr(code):
     return send_file(img_io, mimetype='image/png')
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
